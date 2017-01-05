@@ -1,6 +1,104 @@
 package apparat
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestReset(t *testing.T) {
+	s := NewSystem()
+	s.PC = 0xFFA
+	s.V[1] = 0xAA
+	s.Mem[24] = 0xFF
+	s.Dsp[31] = 16
+	s.Key = s.Key | 0xF
+	s.Reset()
+	for i := 0; i < 16; i++ {
+		if s.V[i] != 0 {
+			t.Errorf("expect V%d to be 0, got %d", i, s.V[i])
+		}
+	}
+	for i := 0; i < 4096; i++ {
+		if s.Mem[i] != 0 {
+			t.Errorf("expect mem %X to be 0, got %d", i, s.Mem[i])
+		}
+	}
+	for i := 0; i < 32; i++ {
+		if s.Dsp[i] != 0 {
+			t.Errorf("expect display line %d to be 0, got %d", i, s.Dsp[i])
+		}
+	}
+	if s.PC != 0x200 {
+		t.Errorf("expect PC to be 0x200, got %X", s.PC)
+	}
+	if s.Key != 0 {
+		t.Errorf("expect key map to be 0, got %d", s.Key)
+	}
+}
+
+func TestStackPanicsUnderflow(t *testing.T) {
+	s := &Stack{}
+	defer func() {
+		err := recover()
+		if err == nil {
+			t.Error("expected panic")
+		}
+		if !strings.Contains(err.(string), "underflow") {
+			t.Error("expect panic message stack underflow")
+		}
+	}()
+	s.Pop()
+}
+
+func TestStackPanicsOverflow(t *testing.T) {
+	s := &Stack{}
+	var i int
+	defer func() {
+		err := recover()
+		if err == nil {
+			t.Error("expected panic")
+		}
+		if !strings.Contains(err.(string), "overflow") {
+			t.Error("expect panic message stack overflow")
+		}
+		if i != 15 {
+			t.Errorf("expect panic on last push, got i %d", i)
+		}
+	}()
+	for i = 0; i < 16; i++ {
+		s.Push(0xA00)
+	}
+}
+
+func TestStack(t *testing.T) {
+	s := &Stack{}
+	s.Push(0xA10)
+	s.Push(0xF12)
+	s.Push(0x123)
+	x := s.Pop()
+	if x != 0x123 {
+		t.Errorf("expect pop last 0x123")
+	}
+	s.Push(0x423)
+	x = s.Pop()
+	if x != 0x423 {
+		t.Errorf("expect pop last 0x423")
+	}
+	s.Push(0x000)
+	s.Push(0xFF0)
+	expect := []uint16{
+		0xFF0,
+		0x000,
+		0xF12,
+		0xA10,
+	}
+	for _, e := range expect {
+		x = s.Pop()
+		if x != e {
+			t.Errorf("expect %X, got %X", e, x)
+		}
+	}
+}
 
 func TestFetchOpCode(t *testing.T) {
 	m := Memory{}
