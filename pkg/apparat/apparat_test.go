@@ -3,6 +3,7 @@ package apparat
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestReset(t *testing.T) {
@@ -124,4 +125,19 @@ func TestFetchOpCode(t *testing.T) {
 			return
 		}
 	}
+}
+
+func TestTimer(t *testing.T) {
+	tm := NewTimers()
+	tm.SetDelay(30)
+	if tm.Delay() == 0 {
+		t.Error("already counted down?")
+	}
+	time.Sleep(time.Second)
+	end := tm.Delay()
+	if end != 0 {
+		t.Errorf("expect delay to be counted to 0, have %d", end)
+	}
+	tm.Stop()
+
 }
