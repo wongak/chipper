@@ -1,0 +1,21 @@
+{
+	"version": 0,
+	"dependencies": [
+		{
+			"importpath": "github.com/mattn/go-runewidth",
+			"repository": "https://github.com/mattn/go-runewidth",
+			"vcs": "git",
+			"revision": "737072b4e32b7a5018b4a7125da8d12de90e8045",
+			"branch": "master",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/nsf/termbox-go",
+			"repository": "https://github.com/nsf/termbox-go",
+			"vcs": "git",
+			"revision": "abe82ce5fb7a42fbd6784a5ceb71aff977e09ed8",
+			"branch": "master",
+			"notests": true
+		}
+	]
+}
