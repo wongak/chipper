@@ -1,5 +1,7 @@
 package apparat
 
+import "sync"
+
 type (
 	// Stack is the CHIP-8 stack with 16 levels
 	Stack struct {
@@ -11,20 +13,14 @@ type (
 	Memory [4096]byte
 
 	// Display represents the display state
-	Display [32]uint64
+	Display struct {
+		m *sync.RWMutex
+		d [32]uint64
+	}
 
 	// Keys represents the keyboard state
 	Keys byte
 )
-
-// NewMemory creates a memory with the preloaded CHIP-8 data
-func NewMemory() Memory {
-	m := [4096]byte{}
-	for i, f := range fontset {
-		m[0x50+i] = f
-	}
-	return Memory(m)
-}
 
 // Reset resets the stack
 func (s *Stack) Reset() {
@@ -51,6 +47,15 @@ func (s *Stack) Pop() uint16 {
 	return v
 }
 
+// NewMemory creates a memory with the preloaded CHIP-8 data
+func NewMemory() Memory {
+	m := [4096]byte{}
+	for i, f := range fontset {
+		m[0x50+i] = f
+	}
+	return Memory(m)
+}
+
 // FetchOpcode retrieves an opcode from the given address
 //
 // An opcode consists of 2 bytes, therefore we need to retrieve
@@ -60,4 +65,11 @@ func (m *Memory) FetchOpcode(addr uint16) OpCode {
 	opcode = uint16(m[addr]) << 8
 	opcode = opcode | uint16(m[addr+1])
 	return OpCode(opcode)
+}
+
+func NewDisplay() *Display {
+	return &Display{
+		m: &sync.RWMutex{},
+		d: [32]uint64{},
+	}
 }

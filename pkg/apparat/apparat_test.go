@@ -3,7 +3,6 @@ package apparat
 import (
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestReset(t *testing.T) {
@@ -11,7 +10,7 @@ func TestReset(t *testing.T) {
 	s.PC = 0xFFA
 	s.V[1] = 0xAA
 	s.Mem[24] = 0xFF
-	s.Dsp[31] = 16
+	s.Dsp.d[31] = 16
 	s.Key = s.Key | 0xF
 	s.Reset()
 	for i := 0; i < 16; i++ {
@@ -19,14 +18,14 @@ func TestReset(t *testing.T) {
 			t.Errorf("expect V%d to be 0, got %d", i, s.V[i])
 		}
 	}
-	for i := 0; i < 4096; i++ {
+	for i := 0x200; i < 4096; i++ {
 		if s.Mem[i] != 0 {
 			t.Errorf("expect mem %X to be 0, got %d", i, s.Mem[i])
 		}
 	}
 	for i := 0; i < 32; i++ {
-		if s.Dsp[i] != 0 {
-			t.Errorf("expect display line %d to be 0, got %d", i, s.Dsp[i])
+		if s.Dsp.d[i] != 0 {
+			t.Errorf("expect display line %d to be 0, got %d", i, s.Dsp.d[i])
 		}
 	}
 	if s.PC != 0x200 {
@@ -125,19 +124,4 @@ func TestFetchOpCode(t *testing.T) {
 			return
 		}
 	}
-}
-
-func TestTimer(t *testing.T) {
-	tm := NewTimers()
-	tm.SetDelay(30)
-	if tm.Delay() == 0 {
-		t.Error("already counted down?")
-	}
-	time.Sleep(time.Second)
-	end := tm.Delay()
-	if end != 0 {
-		t.Errorf("expect delay to be counted to 0, have %d", end)
-	}
-	tm.Stop()
-
 }
