@@ -112,8 +112,5 @@ func (s *System) Run() {
 	}
 }
 
-func (s *System) executeOpcode() {
-}
-
 func (s *System) draw() {
 }
