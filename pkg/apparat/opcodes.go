@@ -184,6 +184,26 @@ func (s *System) executeOpcode() {
 		}
 		s.PC += 2
 
+	// 0xANNN: set I = NNN
+	// load I NNN
+	case op.Instruction() == 0xA:
+		s.I = op.ExtractAddr()
+		s.PC += 2
+
+	// 0xBNNN: jump V0 + NNN
+	// jump 0xNNN v0
+	case op.Instruction() == 0xB:
+		s.PC = op.ExtractAddr()
+		s.PC += uint16(s.V[0])
+
+	// 0xCXNN: rand Vx & NN
+	// rnd Vx 0xNN
+	case op.Instruction() == 0xC:
+		x, n := op.ExtractVNN()
+		s.rndSource.Read(s.V[x : x+1])
+		s.V[x] = s.V[x] & n
+		s.PC += 2
+
 	default:
 		panic(fmt.Sprintf("unknown opcode %X", op))
 	}

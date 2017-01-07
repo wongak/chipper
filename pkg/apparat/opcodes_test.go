@@ -209,3 +209,39 @@ func TestShl(t *testing.T) {
 		return
 	}
 }
+
+type rndMock struct {
+	w []byte
+}
+
+func (r rndMock) Read(p []byte) (int, error) {
+	return copy(p, r.w), nil
+}
+
+func testRnd(t *testing.T) {
+	s := NewSystem()
+	s.rndSource = rndMock{
+		w: []byte{0xA1},
+	}
+	s.Mem[0x200] = 0xC0 // 0xC0FF rnd V0 FF
+	s.Mem[0x201] = 0xFF
+
+	s.executeOpcode()
+	if s.V[0] != 0xA1 {
+		t.Errorf("expect rand source result in V0, got %X", s.V[1])
+		return
+	}
+	for i := 1; i < 16; i++ {
+		if s.V[i] != 0 {
+			t.Errorf("expect V%d to be 0, got %X", i, s.V[i])
+		}
+	}
+	s.Mem[0x202] = 0xC0 // 0xC0E0 rnd V0 E0
+	s.Mem[0x203] = 0xE0
+	// is A1 & E0 = A0
+	s.executeOpcode()
+	if s.V[0] != 0xA0 {
+		t.Errorf("expect rand source result in V0 0xA0, got %X", s.V[0])
+		return
+	}
+}

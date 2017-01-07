@@ -1,6 +1,8 @@
 package apparat
 
 import (
+	"crypto/rand"
+	"io"
 	"sync"
 	"time"
 )
@@ -19,6 +21,9 @@ type (
 
 		// controls
 		Stop chan struct{}
+
+		// emulated
+		rndSource io.Reader
 
 		// V is the representation of the registers V0-VE
 		V [16]byte
@@ -47,6 +52,8 @@ func NewSystem() *System {
 		m:          &sync.RWMutex{},
 
 		Stop: make(chan struct{}),
+
+		rndSource: rand.Reader,
 
 		PC:     0x200,
 		Stack:  &Stack{},
