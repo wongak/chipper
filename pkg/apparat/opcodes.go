@@ -27,13 +27,13 @@ func (o OpCode) ExtractVNN() (uint8, uint8) {
 	return v, cmp
 }
 
-// ExtractXY extracts 3 bytes for the arithmetic instructions
+// ExtractXYN extracts 3 bytes for the arithmetic instructions
 // 0x0XYO
-func (o OpCode) ExtractXY() (uint8, uint8, uint8) {
+func (o OpCode) ExtractXYN() (uint8, uint8, uint8) {
 	x := uint8((uint16(o) & 0x0F00) >> 8)
 	y := uint8((uint16(o) & 0x00F0) >> 4)
-	op := uint8(uint16(o) & 0x000F)
-	return x, y, op
+	n := uint8(uint16(o) & 0x000F)
+	return x, y, n
 }
 
 func (s *System) executeOpcode() {
@@ -105,7 +105,7 @@ func (s *System) executeOpcode() {
 		s.PC += 2
 
 	case op.Instruction() == 0x8:
-		x, y, o := op.ExtractXY()
+		x, y, o := op.ExtractXYN()
 		switch o {
 		// 0x8XY0: Vx=Vy
 		// load Vx, Vy
@@ -177,7 +177,7 @@ func (s *System) executeOpcode() {
 	// 0x9XY0: if Vx != Vy
 	// skip.ne Vx Vy
 	case op.Instruction() == 0x9:
-		x, y, _ := op.ExtractXY()
+		x, y, _ := op.ExtractXYN()
 		if s.V[x] != s.V[y] {
 			s.PC += 4
 			return
@@ -203,6 +203,10 @@ func (s *System) executeOpcode() {
 		s.rndSource.Read(s.V[x : x+1])
 		s.V[x] = s.V[x] & n
 		s.PC += 2
+
+	case op.Instruction() == 0xD:
+		x, y, n := op.ExtractXYN()
+		_, _, _ = x, y, n
 
 	default:
 		panic(fmt.Sprintf("unknown opcode %X", op))

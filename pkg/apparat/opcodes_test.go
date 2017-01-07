@@ -14,7 +14,7 @@ func TestInstructionOpcode(t *testing.T) {
 
 func TestExtractXY(t *testing.T) {
 	op := OpCode(0x8AFC)
-	x, y, o := op.ExtractXY()
+	x, y, o := op.ExtractXYN()
 	if x != 0xA {
 		t.Errorf("expect x to be 0xA, got %X", x)
 	}
