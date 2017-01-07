@@ -26,7 +26,7 @@ func TestExtractXY(t *testing.T) {
 	}
 }
 
-func TestRETStackUnderflow(t *testing.T) {
+func TestRetStackUnderflow(t *testing.T) {
 	defer func() {
 		err := recover()
 		if err == nil {
@@ -57,7 +57,7 @@ func TestJMP(t *testing.T) {
 	}
 }
 
-func TestSIE(t *testing.T) {
+func TestSkipIfEq(t *testing.T) {
 	s := NewSystem()
 	s.V[4] = 0xA1
 
@@ -132,18 +132,80 @@ func TestProg(t *testing.T) {
 	}
 }
 
-func TestADR(t *testing.T) {
+func TestAdd(t *testing.T) {
 	s := NewSystem()
 
-	s.Mem[0x200] = 0x6F // SRG F FF
+	s.Mem[0x200] = 0x6F // load VF FF
 	s.Mem[0x201] = 0xFF
-	s.Mem[0x202] = 0x7F // ADR F 01
+	s.Mem[0x202] = 0x7F // add VF 0x01
 	s.Mem[0x203] = 0x01
 
 	s.executeOpcode()
 	s.executeOpcode()
 
 	if s.V[0xF] != 0 {
-		t.Errorf("expect ADR overflow (0), got %X", s.V[0xF])
+		t.Errorf("expect add overflow (0), got %X", s.V[0xF])
+		return
+	}
+
+	s.Mem[0x204] = 0x6A // load VA FE
+	s.Mem[0x205] = 0xFE
+	s.Mem[0x206] = 0x6B // load VB 04
+	s.Mem[0x207] = 0x04
+	s.Mem[0x208] = 0x8A // add VA, VB
+	s.Mem[0x209] = 0xB4
+	for i := 0; i < 3; i++ {
+		s.executeOpcode()
+	}
+	if s.V[0xA] != 0x02 {
+		t.Errorf("expect VA to be 0x02, got %X", s.V[0xA])
+		return
+	}
+	if s.V[0xF] != 1 {
+		t.Errorf("expect carry to be 1, got %X", s.V[0xF])
+		return
+	}
+}
+
+func TestSub(t *testing.T) {
+	s := NewSystem()
+
+	s.Mem[0x200] = 0x6A // load VA 02
+	s.Mem[0x201] = 0x02
+	s.Mem[0x202] = 0x6C // load VC 03
+	s.Mem[0x203] = 0x03
+	s.Mem[0x204] = 0x8A // sub VA VC
+	s.Mem[0x205] = 0xC5
+	for i := 0; i < 3; i++ {
+		s.executeOpcode()
+	}
+	if s.V[0xA] != 0xFF {
+		t.Errorf("expect VA to be 0xFF (wraparound), got %X", s.V[0xA])
+		return
+	}
+	if s.V[0xF] != 0 {
+		t.Errorf("expect borrow flag to be 0, got %X", s.V[0xF])
+		return
+	}
+}
+
+func TestShl(t *testing.T) {
+	s := NewSystem()
+
+	copy(s.Mem[:], []byte{
+		0x64, 0xA0, // load V4 A0 (1010 0000)
+		0x84, 0x0E, // shl V4
+	})
+	s.PC = 0
+	s.executeOpcode()
+	s.executeOpcode()
+
+	if s.V[0xF] != 1 {
+		t.Errorf("expect most siginificant bit to be 1, got VF %X|", s.V[0xF])
+		return
+	}
+	if s.V[4] != 0x40 {
+		t.Errorf("expect shifted 0x40, got %X", s.V[4])
+		return
 	}
 }

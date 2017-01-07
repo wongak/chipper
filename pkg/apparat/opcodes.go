@@ -1,6 +1,9 @@
 package apparat
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 type (
 	// OpCode represents an opcode
@@ -115,6 +118,60 @@ func (s *System) executeOpcode() {
 		case 0x1:
 			s.V[x] |= s.V[y]
 			s.PC += 2
+
+		// 0x8XY2: Vx=Vx&Vy
+		// and Vx, Vy
+		case 0x2:
+			s.V[x] &= s.V[y]
+			s.PC += 2
+
+		// 0x8XY3: Vx=Vx^Vy
+		// xor Vx, Vy
+		case 0x3:
+			s.V[x] ^= s.V[y]
+			s.PC += 2
+
+		// 0x8XY4: Vx += Vy
+		// add Vx, Vy
+		case 0x4:
+			s.V[0xF] = 0
+			if math.MaxUint8-s.V[y] < s.V[x] {
+				s.V[0xF] = 1
+			}
+			s.V[x] += s.V[y]
+			s.PC += 2
+
+		// 0x8XY5: Vx -= Vy
+		// sub Vx, Vy
+		case 0x5:
+			s.V[0xF] = 1
+			if s.V[y] > s.V[x] {
+				s.V[0xF] = 0
+			}
+			s.V[x] -= s.V[y]
+			s.PC += 2
+
+		// 0x8XY6: Vx >> 1
+		// shr Vx
+		case 0x6:
+			s.V[0xF] = s.V[x] & 0x01
+			s.V[x] = s.V[x] >> 1
+			s.PC += 2
+
+		// 0x8XY7: Vx = Vy - Vx
+		// dif Vx Vy
+		case 0x7:
+			s.V[0xF] = 1
+			if s.V[x] > s.V[y] {
+				s.V[0xF] = 0
+			}
+			s.V[x] = s.V[y] - s.V[x]
+
+		// 0x8XYE: Vx << 1
+		// shl Vx
+		case 0xE:
+			s.V[0xF] = (s.V[x] & 0x80) >> 7
+			s.V[x] = s.V[x] << 1
 		}
 
 	default:
