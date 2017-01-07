@@ -98,7 +98,7 @@ func (s *System) executeOpcode() {
 		s.PC += 2
 
 	// 0x7XNN: Vx += NN
-	// ADD Vx NN
+	// add Vx NN
 	case op.Instruction() == 0x7:
 		v, val := op.ExtractVNN()
 		s.V[v] += val
@@ -173,6 +173,16 @@ func (s *System) executeOpcode() {
 			s.V[0xF] = (s.V[x] & 0x80) >> 7
 			s.V[x] = s.V[x] << 1
 		}
+
+	// 0x9XY0: if Vx != Vy
+	// skip.ne Vx Vy
+	case op.Instruction() == 0x9:
+		x, y, _ := op.ExtractXY()
+		if s.V[x] != s.V[y] {
+			s.PC += 4
+			return
+		}
+		s.PC += 2
 
 	default:
 		panic(fmt.Sprintf("unknown opcode %X", op))
