@@ -11,7 +11,7 @@ func TestReset(t *testing.T) {
 	s.V[1] = 0xAA
 	s.Mem[24] = 0xFF
 	s.Dsp.d[31] = 16
-	s.Key = s.Key | 0xF
+	s.Key.SetState(0xF)
 	s.Reset()
 	for i := 0; i < 16; i++ {
 		if s.V[i] != 0 {
@@ -31,7 +31,7 @@ func TestReset(t *testing.T) {
 	if s.PC != 0x200 {
 		t.Errorf("expect PC to be 0x200, got %X", s.PC)
 	}
-	if s.Key != 0 {
+	if s.Key.HasState() {
 		t.Errorf("expect key map to be 0, got %d", s.Key)
 	}
 }

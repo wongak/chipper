@@ -121,6 +121,14 @@ func (d *Display) Line(y uint8) uint64 {
 
 }
 
+func (d *Display) Clear() {
+	d.RWM.Lock()
+	for i := 0; i < 32; i++ {
+		d.d[i] = 0
+	}
+	d.RWM.Unlock()
+}
+
 // Dump dumps the display buffer in the same format
 // as hexdump
 func (d *Display) Dump() string {
