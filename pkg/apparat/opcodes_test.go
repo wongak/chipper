@@ -218,7 +218,7 @@ func (r rndMock) Read(p []byte) (int, error) {
 	return copy(p, r.w), nil
 }
 
-func testRnd(t *testing.T) {
+func TestRnd(t *testing.T) {
 	s := NewSystem()
 	s.rndSource = rndMock{
 		w: []byte{0xA1},
@@ -243,5 +243,43 @@ func testRnd(t *testing.T) {
 	if s.V[0] != 0xA0 {
 		t.Errorf("expect rand source result in V0 0xA0, got %X", s.V[0])
 		return
+	}
+}
+
+func TestLoadRestoreReg(t *testing.T) {
+	s := NewSystem()
+	// test data
+	copy(s.Mem[0x500:], []byte{
+		0x01, 0x02, 0x03, 0x04,
+	})
+	testProg := []byte{
+		0xA5, 0x00, // load I 0x500
+		0xF3, 0x65, // restore V3
+		0x71, 0xF0, // add V1 F0
+		0x82, 0x34, // add V2 V3
+		0x6F, 0x0F, // load VF, 0F
+		0xFF, 0x55, // save VF
+	}
+	copy(s.Mem[0x200:], testProg)
+	s.executeOpcode()
+	s.executeOpcode()
+	for i := 0; i < 4; i++ {
+		if s.V[i] != uint8(i+1) {
+			t.Errorf("expect reg %d to be %d, got %X", i, i, s.V[i])
+		}
+	}
+	for i := 0; i < 4; i++ {
+		s.executeOpcode()
+	}
+	if s.Mem[0x501] != 0xF2 {
+		t.Errorf("expect 0x501 to be 0xF2, got %X", s.Mem[0x501])
+	}
+	if s.Mem[0x502] != 0x07 {
+		t.Errorf("expect 0x502 to be 0x07, got %X", s.Mem[0x502])
+	}
+	if s.Mem[0x50F] != 0x0F {
+		t.Errorf("expect 0x50F to be 0x0F, got %X", s.Mem[0x50F])
+		t.Logf("reg: %+v\n", s.V)
+		t.Log("mem:\n" + s.Mem.Dump())
 	}
 }
