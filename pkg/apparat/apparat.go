@@ -20,8 +20,9 @@ type (
 		m   *sync.RWMutex
 
 		// controls
-		Stop chan struct{}
-		Draw DrawCall
+		Stop    chan struct{}
+		Draw    DrawCall
+		running bool
 
 		// emulated
 		rndSource io.Reader
@@ -98,12 +99,41 @@ func (s *System) SetSpeed(ops int) {
 	s.m.Unlock()
 }
 
+// IsRunning returns true when the system is running
+func (s *System) IsRunning() bool {
+	s.m.RLock()
+	running := s.running
+	s.m.RUnlock()
+	return running
+}
+
+// Step performs a single step
+func (s *System) Step() {
+	s.m.Lock()
+	s.executeOpcode()
+	s.Draw(s.Dsp)
+	s.m.Unlock()
+}
+
+// Tick manually ticks the timer (currently ticking at
+// around 60Hz)
+// Tick is supposed to be used in conjunction with Step
+// for debugging
+func (s *System) Tick() {
+	s.m.Lock()
+	s.Timers.Tick()
+	s.m.Unlock()
+}
+
 // Run runs the system
 func (s *System) Run() {
+	s.m.Lock()
+	s.running = true
+	s.m.Unlock()
 	t := time.Now()
 	var wait time.Duration
 	for {
-		s.m.RLock()
+		s.m.Lock()
 		// run n opcodes in tick
 		for i := 0; i < s.ops; i++ {
 			s.executeOpcode()
@@ -118,9 +148,12 @@ func (s *System) Run() {
 		}
 		s.Timers.Tick()
 		s.Draw(s.Dsp)
-		s.m.RUnlock()
+		s.m.Unlock()
 		select {
 		case <-s.Stop:
+			s.m.Lock()
+			s.running = false
+			s.m.Unlock()
 			return
 		default:
 		}
