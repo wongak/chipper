@@ -204,9 +204,13 @@ func (s *System) executeOpcode() {
 		s.V[x] = s.V[x] & n
 		s.PC += 2
 
+	// 0xDXYN: draw(Vx, Vy, N)
+	// draw Vx Vy N
 	case op.Instruction() == 0xD:
 		x, y, n := op.ExtractXYN()
-		_, _, _ = x, y, n
+		sprite := s.Mem[s.I : (s.I+(uint16(n)*8))+1]
+		s.V[0xF] = s.Dsp.draw(s.V[x], s.V[y], n, sprite)
+		s.PC += 2
 
 	default:
 		panic(fmt.Sprintf("unknown opcode %X", op))

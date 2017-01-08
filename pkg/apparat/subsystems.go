@@ -1,6 +1,10 @@
 package apparat
 
-import "sync"
+import (
+	"encoding/binary"
+	"encoding/hex"
+	"sync"
+)
 
 type (
 	// Stack is the CHIP-8 stack with 16 levels
@@ -14,8 +18,8 @@ type (
 
 	// Display represents the display state
 	Display struct {
-		m *sync.RWMutex
-		d [32]uint64
+		RWM *sync.RWMutex
+		d   [32]uint64
 	}
 
 	// Keys represents the keyboard state
@@ -67,9 +71,60 @@ func (m *Memory) FetchOpcode(addr uint16) OpCode {
 	return OpCode(opcode)
 }
 
+// Dump dumps the memory as a hexdump
+func (m *Memory) Dump() string {
+	return hex.Dump(m[:])
+}
+
+// NewDisplay creates a new display
+//
+// It is implemented as a memory map, which can be read
+// by other processes to perform the actual drawing
 func NewDisplay() *Display {
 	return &Display{
-		m: &sync.RWMutex{},
-		d: [32]uint64{},
+		RWM: &sync.RWMutex{},
+		d:   [32]uint64{},
 	}
+}
+
+func (d *Display) draw(x, y, h uint8, sprite []byte) uint8 {
+	d.RWM.Lock()
+	defer d.RWM.Unlock()
+	var flipped uint8
+	var l uint8
+	for l = 0; l < h; l++ {
+		// get line bitmap
+		m := d.d[l+y]
+		// shift sprite to xa position
+		sp := uint64(sprite[l]) << (56 - x)
+		// XOR bitmap and sprite
+		d.d[l+y] = m ^ sp
+		// AND bitmap and sprite will give us any
+		// flips
+		if flipped == 0 && (m&sp != 0) {
+			flipped = 0x1
+		}
+	}
+	return flipped
+}
+
+// Line returns the bitmap for line y
+func (d *Display) Line(y uint8) uint64 {
+	d.RWM.RLock()
+	l := d.d[y]
+	d.RWM.RUnlock()
+	return l
+
+}
+
+// Dump dumps the display buffer in the same format
+// as hexdump
+func (d *Display) Dump() string {
+	buf := make([]byte, 32*8)
+	d.RWM.RLock()
+	for i, r := range d.d {
+		binary.BigEndian.PutUint64(buf[i*8:], r)
+	}
+	d.RWM.RUnlock()
+	return hex.Dump(buf)
 }

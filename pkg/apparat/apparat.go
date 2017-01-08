@@ -21,6 +21,7 @@ type (
 
 		// controls
 		Stop chan struct{}
+		Draw DrawCall
 
 		// emulated
 		rndSource io.Reader
@@ -42,6 +43,15 @@ type (
 
 		Key Keys
 	}
+
+	// DrawCall is the connection to the actual implementation
+	// of the display.
+	// The func will receive a display, it should read lock the mutex,
+	// then draw.
+	// The DrawCall will be called each time the system wants
+	// to update a frame. The display acts like the framebufer.
+	// The call itself should not block.
+	DrawCall func(dsp *Display)
 )
 
 // NewSystem initializes a new system
@@ -52,6 +62,7 @@ func NewSystem() *System {
 		m:          &sync.RWMutex{},
 
 		Stop: make(chan struct{}),
+		Draw: func(_ *Display) {},
 
 		rndSource: rand.Reader,
 
@@ -106,7 +117,7 @@ func (s *System) Run() {
 			time.Sleep(s.clockSpeed - wait)
 		}
 		s.Timers.Tick()
-		s.draw()
+		s.Draw(s.Dsp)
 		s.m.RUnlock()
 		select {
 		case <-s.Stop:
@@ -117,7 +128,4 @@ func (s *System) Run() {
 		// we start measuring from the last cycle
 		t = time.Now()
 	}
-}
-
-func (s *System) draw() {
 }
