@@ -9,6 +9,9 @@ import (
 
 const (
 	clockSpeed = 60
+
+	DisplayWidth  = 64
+	DisplayHeight = 32
 )
 
 type (
@@ -125,6 +128,21 @@ func (s *System) Tick() {
 	s.m.Unlock()
 }
 
+// LoadROM loads the contents of b into the execution space
+// 0x200
+func (s *System) LoadROM(b []byte) {
+	s.m.Lock()
+	copy(s.Mem[0x200:], b)
+	s.m.Unlock()
+}
+
+func (s *System) MemDump() string {
+	s.m.Lock()
+	d := s.Mem.Dump()
+	s.m.Unlock()
+	return d
+}
+
 // Run runs the system
 func (s *System) Run() {
 	s.m.Lock()
@@ -138,6 +156,7 @@ func (s *System) Run() {
 		for i := 0; i < s.ops; i++ {
 			s.executeOpcode()
 		}
+		s.m.Unlock()
 		// wait for tick
 		// everything, opcodes, drawing, tick and loop
 		// should be finished in an almost constant
@@ -146,9 +165,10 @@ func (s *System) Run() {
 		if wait < s.clockSpeed {
 			time.Sleep(s.clockSpeed - wait)
 		}
+		s.m.Lock()
 		s.Timers.Tick()
-		s.Draw(s.Dsp)
 		s.m.Unlock()
+		s.Draw(s.Dsp)
 		select {
 		case <-s.Stop:
 			s.m.Lock()
