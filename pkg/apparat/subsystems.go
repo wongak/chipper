@@ -23,7 +23,11 @@ type (
 	}
 
 	// Keys represents the keyboard state
-	Keys uint8
+	Keys struct {
+		m        *sync.Mutex
+		hasState bool
+		state    uint8
+	}
 )
 
 // Reset resets the stack
@@ -127,4 +131,36 @@ func (d *Display) Dump() string {
 	}
 	d.RWM.RUnlock()
 	return hex.Dump(buf)
+}
+
+func NewKeys() *Keys {
+	return &Keys{
+		m:     &sync.Mutex{},
+		state: 0,
+	}
+}
+
+func (k *Keys) HasState() bool {
+	k.m.Lock()
+	defer k.m.Unlock()
+	return k.hasState
+}
+
+func (k *Keys) State() uint8 {
+	k.m.Lock()
+	defer k.m.Unlock()
+	return k.state
+}
+
+func (k *Keys) SetState(s uint8) {
+	k.m.Lock()
+	k.state = s
+	k.hasState = true
+	k.m.Unlock()
+}
+
+func (k *Keys) Reset() {
+	k.m.Lock()
+	k.hasState = false
+	k.m.Unlock()
 }

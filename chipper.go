@@ -90,8 +90,41 @@ mainLoop:
 							s.SetSpeed(0)
 						}
 						paused = !paused
-					case 'm':
-						break mainLoop
+					case 'l':
+						showListing = !showListing
+
+					case '1':
+						s.Key.SetState(1)
+					case '2':
+						s.Key.SetState(2)
+					case '3':
+						s.Key.SetState(3)
+					case 'q':
+						s.Key.SetState(4)
+					case 'w':
+						s.Key.SetState(5)
+					case 'e':
+						s.Key.SetState(6)
+					case 'a':
+						s.Key.SetState(7)
+					case 's':
+						s.Key.SetState(8)
+					case 'd':
+						s.Key.SetState(9)
+					case 'z', 'y':
+						s.Key.SetState(0xA)
+					case 'x':
+						s.Key.SetState(0)
+					case 'c':
+						s.Key.SetState(0xB)
+					case '4':
+						s.Key.SetState(0xC)
+					case 'r':
+						s.Key.SetState(0xD)
+					case 'f':
+						s.Key.SetState(0xE)
+					case 'v':
+						s.Key.SetState(0xF)
 					}
 				}
 			}

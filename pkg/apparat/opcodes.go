@@ -222,7 +222,7 @@ func (s *System) executeOpcode() {
 		// 0xEX9E: if(key()==Vx)
 		// skip.eq Vx, key
 		case 0x9E:
-			if x&uint8(s.Key) != 0 {
+			if s.Key.HasState() && x&s.Key.State() != 0 {
 				s.PC += 4
 				return
 			}
@@ -231,7 +231,7 @@ func (s *System) executeOpcode() {
 		// 0xEXA1: if(key()!=Vx)
 		// skip.ne Vx, key
 		case 0xA1:
-			if x&uint8(s.Key) == 0 {
+			if s.Key.HasState() && x&s.Key.State() == 0 {
 				s.PC += 4
 				return
 			}
@@ -254,8 +254,8 @@ func (s *System) executeOpcode() {
 		// 0xFX0A: Vx = get_key()
 		// load Vx, key
 		case 0x0A:
-			if s.Key != 0 {
-				s.V[x] = byte(s.Key)
+			if s.Key.HasState() {
+				s.V[x] = s.Key.State()
 				s.PC += 2
 			}
 

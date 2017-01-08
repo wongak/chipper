@@ -2,7 +2,23 @@ package main
 
 import termbox "github.com/nsf/termbox-go"
 
+var (
+	showListing bool
+	memPos      = 0x200
+)
+
 func drawDebug() {
+	if showListing {
+		drawListing()
+	} else {
+		drawMem()
+	}
+}
+
+func drawListing() {
+}
+
+func drawMem() {
 	mem := s.MemDump()
 	x := 65
 	y := 1

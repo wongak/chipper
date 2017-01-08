@@ -45,7 +45,7 @@ type (
 
 		Timers *Timers
 
-		Key Keys
+		Key *Keys
 	}
 
 	// DrawCall is the connection to the actual implementation
@@ -75,6 +75,7 @@ func NewSystem() *System {
 		Mem:    NewMemory(),
 		Dsp:    NewDisplay(),
 		Timers: &Timers{},
+		Key:    NewKeys(),
 	}
 }
 
@@ -88,7 +89,7 @@ func (s *System) Reset() {
 
 	s.Mem = NewMemory()
 	s.Dsp.d = [32]uint64{}
-	s.Key = 0
+	s.Key.Reset()
 
 	s.Timers.Delay = 0
 	s.Timers.Sound = 0
@@ -156,6 +157,7 @@ func (s *System) Run() {
 		for i := 0; i < s.ops; i++ {
 			s.executeOpcode()
 		}
+		s.Key.Reset()
 		s.m.Unlock()
 		// wait for tick
 		// everything, opcodes, drawing, tick and loop
