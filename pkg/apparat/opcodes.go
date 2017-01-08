@@ -9,6 +9,7 @@ type (
 	// Executer can execute an operation
 	Executer interface {
 		Execute(s *System)
+		String() string
 	}
 
 	// OpCode represents an opcode
@@ -501,7 +502,6 @@ func (o opADD) Execute(s *System) {
 		}
 		s.I += uint16(s.V[x])
 		s.PC += 2
-
 	default:
 		panic("invalid ADD")
 	}
@@ -514,6 +514,9 @@ func (o opADD) String() string {
 	case 0x8:
 		x, y, _ := o.ExtractXYN()
 		return fmt.Sprintf("ADD V%X, V%X\n", x, y)
+	case 0xF:
+		x, _ := o.ExtractVNN()
+		return fmt.Sprintf("ADD I, V%X\n", x)
 	default:
 		panic("invalid ADD")
 	}
@@ -645,10 +648,4 @@ func (o opSKNP) Execute(s *System) {
 func (o opSKNP) String() string {
 	x, _ := o.ExtractVNN()
 	return fmt.Sprintf("SKNP V%X\n", x)
-}
-
-func (s *System) executeOpcode() {
-	op := s.Mem.FetchOpcode(s.PC)
-	exec := op.Executer()
-	exec.Execute(s)
 }

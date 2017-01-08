@@ -76,8 +76,8 @@ func (m *Memory) FetchOpcode(addr uint16) OpCode {
 }
 
 // Dump dumps the memory as a hexdump
-func (m *Memory) Dump() string {
-	return hex.Dump(m[:])
+func (m *Memory) Dump(addr uint16) string {
+	return hex.Dump(m[addr:])
 }
 
 // NewDisplay creates a new display
@@ -121,6 +121,7 @@ func (d *Display) Line(y uint8) uint64 {
 
 }
 
+// Clear clearst the display
 func (d *Display) Clear() {
 	d.RWM.Lock()
 	for i := 0; i < 32; i++ {
@@ -141,6 +142,7 @@ func (d *Display) Dump() string {
 	return hex.Dump(buf)
 }
 
+// NewKeys creates a new key state
 func NewKeys() *Keys {
 	return &Keys{
 		m:     &sync.Mutex{},
@@ -148,18 +150,21 @@ func NewKeys() *Keys {
 	}
 }
 
+// HasState returns true if any key is pressed
 func (k *Keys) HasState() bool {
 	k.m.Lock()
 	defer k.m.Unlock()
 	return k.hasState
 }
 
+// State returns the key state
 func (k *Keys) State() uint8 {
 	k.m.Lock()
 	defer k.m.Unlock()
 	return k.state
 }
 
+// SetState sets the new keystate
 func (k *Keys) SetState(s uint8) {
 	k.m.Lock()
 	k.state = s
@@ -167,6 +172,7 @@ func (k *Keys) SetState(s uint8) {
 	k.m.Unlock()
 }
 
+// Reset resets the state (no key pressed)
 func (k *Keys) Reset() {
 	k.m.Lock()
 	k.hasState = false

@@ -280,6 +280,6 @@ func TestLoadRestoreReg(t *testing.T) {
 	if s.Mem[0x50F] != 0x0F {
 		t.Errorf("expect 0x50F to be 0x0F, got %X", s.Mem[0x50F])
 		t.Logf("reg: %+v\n", s.V)
-		t.Log("mem:\n" + s.Mem.Dump())
+		t.Log("mem:\n" + s.Mem.Dump(0x200))
 	}
 }

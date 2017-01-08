@@ -91,7 +91,7 @@ mainLoop:
 						}
 						paused = !paused
 					case 'l':
-						showListing = !showListing
+						showMem = !showMem
 
 					case '1':
 						s.Key.SetState(1)

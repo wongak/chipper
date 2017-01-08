@@ -10,7 +10,9 @@ import (
 const (
 	clockSpeed = 60
 
-	DisplayWidth  = 64
+	// DisplayWidth is the width of the CHIP-8 display
+	DisplayWidth = 64
+	// DisplayHeight is the height of the CHIP-8 display
 	DisplayHeight = 32
 )
 
@@ -137,11 +139,18 @@ func (s *System) LoadROM(b []byte) {
 	s.m.Unlock()
 }
 
-func (s *System) MemDump() string {
+// MemDump dumps the current mem in a hexdump format
+func (s *System) MemDump(addr uint16) string {
 	s.m.Lock()
-	d := s.Mem.Dump()
+	d := s.Mem.Dump(addr)
 	s.m.Unlock()
 	return d
+}
+
+func (s *System) executeOpcode() {
+	op := s.Mem.FetchOpcode(s.PC)
+	exec := op.Executer()
+	exec.Execute(s)
 }
 
 // Run runs the system
