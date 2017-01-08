@@ -215,6 +215,7 @@ func (s *System) executeOpcode() {
 		s.V[0xF] = s.Dsp.draw(s.V[x], s.V[y], n, sprite)
 		s.PC += 2
 
+	// the 0xEXNN group
 	case op.Instruction() == 0xE:
 		x, n := op.ExtractVNN()
 		switch n {
@@ -234,6 +235,78 @@ func (s *System) executeOpcode() {
 				s.PC += 4
 				return
 			}
+			s.PC += 2
+
+		default:
+			panic(fmt.Sprintf("unknown opcode %X", op))
+		}
+
+	// the 0xFXNN group
+	case op.Instruction() == 0xF:
+		x, n := op.ExtractVNN()
+		switch n {
+		// 0xFX07: Vx = get_delay()
+		// load Vx, delay
+		case 0x07:
+			s.V[x] = s.Timers.Delay
+			s.PC += 2
+
+		// 0xFX0A: Vx = get_key()
+		// load Vx, key
+		case 0x0A:
+			if s.Key != 0 {
+				s.V[x] = byte(s.Key)
+				s.PC += 2
+			}
+
+		// 0xFX15: delay_timer(Vx)
+		// load delay, Vx
+		case 0x15:
+			s.Timers.Delay = s.V[x]
+			s.PC += 2
+
+		// 0xFX18: sound_timer(Vx)
+		// load sound, Vx
+		case 0x18:
+			s.Timers.Sound = s.V[x]
+			s.PC += 2
+
+		// 0xFX1E: I += Vx
+		// add I, Vx
+		case 0x1E:
+			// undocumented feature, overflow
+			// will set VF to 1
+			if math.MaxUint16-uint16(s.V[x]) < s.I {
+				s.V[0xF] = 1
+			}
+			s.I += uint16(s.V[x])
+			s.PC += 2
+
+		// 0xFX29: I = sprite_addr[Vx]
+		// hex Vx
+		case 0x29:
+			s.I = fontsetStartAddress + (fontSize * uint16(s.V[x]))
+			s.PC += 2
+
+		// 0xFX33: set_BCD(Vx)
+		// bcd Vx
+		case 0x33:
+			v := s.V[x]
+			s.Mem[s.I] = v / 100
+			s.Mem[s.I+1] = (v / 10) % 10
+			s.Mem[s.I+2] = (v % 100) % 10
+			s.PC += 2
+
+		// 0xFX55: reg_dump(Vx,&I)
+		// save Vx
+		case 0x55:
+			copy(s.Mem[s.I:], s.V[:x+1])
+			s.PC += 2
+
+		// 0xFX65: reg_load(Vx,&I)
+		// restore Vx
+		case 0x65:
+			copy(s.V[:x+1], s.Mem[s.I:])
 			s.PC += 2
 
 		default:

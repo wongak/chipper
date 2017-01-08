@@ -55,7 +55,7 @@ func (s *Stack) Pop() uint16 {
 func NewMemory() Memory {
 	m := [4096]byte{}
 	for i, f := range fontset {
-		m[0x50+i] = f
+		m[fontsetStartAddress+uint16(i)] = f
 	}
 	return Memory(m)
 }
