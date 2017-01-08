@@ -97,6 +97,9 @@ func (d *Display) draw(x, y, h uint8, sprite []byte) uint8 {
 	var flipped uint8
 	var l uint8
 	for l = 0; l < h; l++ {
+		if l+y >= DisplayHeight {
+			break
+		}
 		// get line bitmap
 		m := d.d[l+y]
 		// shift sprite to xa position
