@@ -22,9 +22,8 @@ type (
 		clockSpeed time.Duration
 		// opcodes per tick to be run (clock speed)
 		ops int
-		m   *sync.RWMutex
-
 		// controls
+		RWM     *sync.RWMutex
 		Stop    chan struct{}
 		Draw    DrawCall
 		running bool
@@ -65,7 +64,7 @@ func NewSystem() *System {
 	return &System{
 		clockSpeed: time.Second / clockSpeed,
 		ops:        10,
-		m:          &sync.RWMutex{},
+		RWM:        &sync.RWMutex{},
 
 		Stop: make(chan struct{}),
 		Draw: func(_ *Display) {},
@@ -83,7 +82,7 @@ func NewSystem() *System {
 
 // Reset resets the system
 func (s *System) Reset() {
-	s.m.Lock()
+	s.RWM.Lock()
 	s.V = [16]byte{}
 	s.I = 0
 	s.PC = 0x200
@@ -95,30 +94,30 @@ func (s *System) Reset() {
 
 	s.Timers.Delay = 0
 	s.Timers.Sound = 0
-	s.m.Unlock()
+	s.RWM.Unlock()
 }
 
 // SetSpeed sets the opcodes per second execution speed
 func (s *System) SetSpeed(ops int) {
-	s.m.Lock()
+	s.RWM.Lock()
 	s.ops = ops
-	s.m.Unlock()
+	s.RWM.Unlock()
 }
 
 // IsRunning returns true when the system is running
 func (s *System) IsRunning() bool {
-	s.m.RLock()
+	s.RWM.RLock()
 	running := s.running
-	s.m.RUnlock()
+	s.RWM.RUnlock()
 	return running
 }
 
 // Step performs a single step
 func (s *System) Step() {
-	s.m.Lock()
+	s.RWM.Lock()
 	s.executeOpcode()
 	s.Draw(s.Dsp)
-	s.m.Unlock()
+	s.RWM.Unlock()
 }
 
 // Tick manually ticks the timer (currently ticking at
@@ -126,48 +125,51 @@ func (s *System) Step() {
 // Tick is supposed to be used in conjunction with Step
 // for debugging
 func (s *System) Tick() {
-	s.m.Lock()
+	s.RWM.Lock()
 	s.Timers.Tick()
-	s.m.Unlock()
+	s.RWM.Unlock()
 }
 
 // LoadROM loads the contents of b into the execution space
 // 0x200
 func (s *System) LoadROM(b []byte) {
-	s.m.Lock()
+	s.RWM.Lock()
 	copy(s.Mem[0x200:], b)
-	s.m.Unlock()
+	s.RWM.Unlock()
 }
 
 // MemDump dumps the current mem in a hexdump format
 func (s *System) MemDump(addr uint16) string {
-	s.m.Lock()
+	s.RWM.Lock()
 	d := s.Mem.Dump(addr)
-	s.m.Unlock()
+	s.RWM.Unlock()
 	return d
 }
 
 func (s *System) executeOpcode() {
 	op := s.Mem.FetchOpcode(s.PC)
-	exec := op.Executer()
+	exec, err := op.Executer()
+	if err != nil {
+		panic(err)
+	}
 	exec.Execute(s)
 }
 
 // Run runs the system
 func (s *System) Run() {
-	s.m.Lock()
+	s.RWM.Lock()
 	s.running = true
-	s.m.Unlock()
+	s.RWM.Unlock()
 	t := time.Now()
 	var wait time.Duration
 	for {
-		s.m.Lock()
+		s.RWM.Lock()
 		// run n opcodes in tick
 		for i := 0; i < s.ops; i++ {
 			s.executeOpcode()
 		}
 		s.Key.Reset()
-		s.m.Unlock()
+		s.RWM.Unlock()
 		// wait for tick
 		// everything, opcodes, drawing, tick and loop
 		// should be finished in an almost constant
@@ -176,15 +178,15 @@ func (s *System) Run() {
 		if wait < s.clockSpeed {
 			time.Sleep(s.clockSpeed - wait)
 		}
-		s.m.Lock()
+		s.RWM.Lock()
 		s.Timers.Tick()
-		s.m.Unlock()
+		s.RWM.Unlock()
 		s.Draw(s.Dsp)
 		select {
 		case <-s.Stop:
-			s.m.Lock()
+			s.RWM.Lock()
 			s.running = false
-			s.m.Unlock()
+			s.RWM.Unlock()
 			return
 		default:
 		}

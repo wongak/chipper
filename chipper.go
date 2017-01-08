@@ -44,7 +44,7 @@ func main() {
 	termbox.Flush()
 
 	s.Draw = func(dsp *apparat.Display) {
-		termbox.Interrupt()
+		go termbox.Interrupt()
 	}
 
 	go s.Run()
@@ -80,6 +80,12 @@ mainLoop:
 			switch ev.Key {
 			case termbox.KeyCtrlC:
 				break mainLoop
+
+			case termbox.KeySpace:
+				if paused {
+					s.Step()
+				}
+
 			default:
 				if ev.Ch != 0 {
 					switch ev.Ch {

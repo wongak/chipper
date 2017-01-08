@@ -101,106 +101,106 @@ func (o OpCode) ExtractXYN() (uint8, uint8, uint8) {
 }
 
 // Executer returns an Executer for the opcode
-func (o OpCode) Executer() Executer {
+func (o OpCode) Executer() (Executer, error) {
 	switch true {
 	// 0x00E0: Clear the screen
 	// CLS
 	case 0x00E0 == o:
-		return opCLS{o}
+		return opCLS{o}, nil
 	// 0x00EE: return from a subroutine
 	// ret
 	case 0x00EE == o:
-		return opRET{o}
+		return opRET{o}, nil
 	// 0x1NNN: JUMP
 	// JP 0xNNN
 	case o.Instruction() == 0x1:
-		return opJP{o}
+		return opJP{o}, nil
 	// 0x2NNN: SUB
 	// CALL 0xNNN
 	case o.Instruction() == 0x2:
-		return opCALL{o}
+		return opCALL{o}, nil
 	// 0x3XNN: if(Vx==NN)
 	// SE Vx, NN (skip if equals)
 	case o.Instruction() == 0x3:
-		return opSE{o}
+		return opSE{o}, nil
 	// 0x4XNN: if (Vx!=NN)
 	// SNE Vx, NN (skip if not equals)
 	case o.Instruction() == 0x4:
-		return opSNE{o}
+		return opSNE{o}, nil
 	// 0x5XY0: if (Vx==Vy)
 	// SE Vx, Vy (skip if register equals)
 	case o.Instruction() == 0x5:
-		return opSE{o}
+		return opSE{o}, nil
 	// 0x6XNN: set Vx = NN
 	// LD Vx, NN
 	case o.Instruction() == 0x6:
-		return opLD{o}
+		return opLD{o}, nil
 	// 0x7XNN: Vx += NN
 	// ADD Vx, NN
 	case o.Instruction() == 0x7:
-		return opADD{o}
+		return opADD{o}, nil
 	case o.Instruction() == 0x8:
 		_, _, op := o.ExtractXYN()
 		switch op {
 		// 0x8XY0: Vx=Vy
 		// LD Vx, Vy
 		case 0x0:
-			return opLD{o}
+			return opLD{o}, nil
 		// 0x8XY1: Vx=Vx|Vy
 		// OR Vx, Vy
 		case 0x1:
-			return opOR{o}
+			return opOR{o}, nil
 		// 0x8XY2: Vx=Vx&Vy
 		// AND Vx, Vy
 		case 0x2:
-			return opAND{o}
+			return opAND{o}, nil
 		// 0x8XY3: Vx=Vx^Vy
 		// XOR Vx, Vy
 		case 0x3:
-			return opXOR{o}
+			return opXOR{o}, nil
 		// 0x8XY4: Vx += Vy
 		// ADD Vx, Vy
 		case 0x4:
-			return opADD{o}
+			return opADD{o}, nil
 		// 0x8XY5: Vx -= Vy
 		// SUB Vx, Vy
 		case 0x5:
-			return opSUB{o}
+			return opSUB{o}, nil
 		// 0x8XY6: Vx >> 1
 		// SHR Vx
 		case 0x6:
-			return opSHR{o}
+			return opSHR{o}, nil
 		// 0x8XY7: Vx = Vy - Vx
 		// SUBN Vx, Vy
 		case 0x7:
-			return opSUBN{o}
+			return opSUBN{o}, nil
 		// 0x8XYE: Vx << 1
 		// SHL Vx
 		case 0xE:
-			return opSHL{o}
+			return opSHL{o}, nil
 		default:
 			panic(fmt.Sprintf("unknown opcode %X", o))
 		}
 	// 0x9XY0: if Vx != Vy
 	// SNE Vx Vy
 	case o.Instruction() == 0x9:
-		return opSNE{o}
+		return opSNE{o}, nil
 	// 0xANNN: set I = NNN
 	// LD I NNN
 	case o.Instruction() == 0xA:
-		return opLD{o}
+		return opLD{o}, nil
 	// 0xBNNN: jump V0 + NNN
 	// JP 0xNNN v0
 	case o.Instruction() == 0xB:
-		return opJP{o}
+		return opJP{o}, nil
 	// 0xCXNN: rand Vx & NN
 	// RND Vx 0xNN
 	case o.Instruction() == 0xC:
-		return opRND{o}
+		return opRND{o}, nil
 	// 0xDXYN: draw(Vx, Vy, N)
 	// DRW Vx Vy N
 	case o.Instruction() == 0xD:
-		return opDRW{o}
+		return opDRW{o}, nil
 	// the 0xEXNN group
 	case o.Instruction() == 0xE:
 		_, n := o.ExtractVNN()
@@ -208,11 +208,11 @@ func (o OpCode) Executer() Executer {
 		// 0xEX9E: if(key()==Vx)
 		// SKP Vx
 		case 0x9E:
-			return opSKP{o}
+			return opSKP{o}, nil
 		// 0xEXA1: if(key()!=Vx)
 		// skip.ne Vx, key
 		case 0xA1:
-			return opSKNP{o}
+			return opSKNP{o}, nil
 		default:
 			panic(fmt.Sprintf("unknown opcode %X", o))
 		}
@@ -223,44 +223,44 @@ func (o OpCode) Executer() Executer {
 		// 0xFX07: Vx = get_delay()
 		// LD Vx, DT
 		case 0x07:
-			return opLD{o}
+			return opLD{o}, nil
 		// 0xFX0A: Vx = get_key()
 		// LD Vx, K
 		case 0x0A:
-			return opLD{o}
+			return opLD{o}, nil
 		// 0xFX15: delay_timer(Vx)
 		// LD DT, Vx
 		case 0x15:
-			return opLD{o}
+			return opLD{o}, nil
 		// 0xFX18: sound_timer(Vx)
 		// LD ST, Vx
 		case 0x18:
-			return opLD{o}
+			return opLD{o}, nil
 		// 0xFX1E: I += Vx
 		// ADD I, Vx
 		case 0x1E:
-			return opADD{o}
+			return opADD{o}, nil
 		// 0xFX29: I = sprite_addr[Vx]
 		// LD F, Vx
 		case 0x29:
-			return opLD{o}
+			return opLD{o}, nil
 		// 0xFX33: set_BCD(Vx)
 		// LD B, Vx
 		case 0x33:
-			return opLD{o}
+			return opLD{o}, nil
 		// 0xFX55: reg_dump(Vx,&I)
 		// LD [I], Vx
 		case 0x55:
-			return opLD{o}
+			return opLD{o}, nil
 		// 0xFX65: reg_load(Vx,&I)
 		// LD Vx, [I]
 		case 0x65:
-			return opLD{o}
+			return opLD{o}, nil
 		default:
-			panic(fmt.Sprintf("unknown opcode %X", o))
+			return nil, fmt.Errorf("unknown opcode %X", o)
 		}
 	default:
-		panic(fmt.Sprintf("unknown opcode %X", o))
+		return nil, fmt.Errorf("unknown opcode %X", o)
 	}
 }
 
@@ -274,6 +274,7 @@ func (o opCLS) String() string {
 
 func (o opRET) Execute(s *System) {
 	s.PC = s.Stack.Pop()
+	s.PC += 2
 }
 func (o opRET) String() string {
 	return "RET\n"
