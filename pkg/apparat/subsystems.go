@@ -23,7 +23,7 @@ type (
 	}
 
 	// Keys represents the keyboard state
-	Keys byte
+	Keys uint8
 )
 
 // Reset resets the stack

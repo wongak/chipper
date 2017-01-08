@@ -172,6 +172,9 @@ func (s *System) executeOpcode() {
 		case 0xE:
 			s.V[0xF] = (s.V[x] & 0x80) >> 7
 			s.V[x] = s.V[x] << 1
+
+		default:
+			panic(fmt.Sprintf("unknown opcode %X", op))
 		}
 
 	// 0x9XY0: if Vx != Vy
@@ -211,6 +214,31 @@ func (s *System) executeOpcode() {
 		sprite := s.Mem[s.I : (s.I+(uint16(n)*8))+1]
 		s.V[0xF] = s.Dsp.draw(s.V[x], s.V[y], n, sprite)
 		s.PC += 2
+
+	case op.Instruction() == 0xE:
+		x, n := op.ExtractVNN()
+		switch n {
+		// 0xEX9E: if(key()==Vx)
+		// skip.eq Vx, key
+		case 0x9E:
+			if x&uint8(s.Key) != 0 {
+				s.PC += 4
+				return
+			}
+			s.PC += 2
+
+		// 0xEXA1: if(key()!=Vx)
+		// skip.ne Vx, key
+		case 0xA1:
+			if x&uint8(s.Key) == 0 {
+				s.PC += 4
+				return
+			}
+			s.PC += 2
+
+		default:
+			panic(fmt.Sprintf("unknown opcode %X", op))
+		}
 
 	default:
 		panic(fmt.Sprintf("unknown opcode %X", op))
