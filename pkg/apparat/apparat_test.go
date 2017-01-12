@@ -10,7 +10,7 @@ func TestReset(t *testing.T) {
 	s.PC = 0xFFA
 	s.V[1] = 0xAA
 	s.Mem[24] = 0xFF
-	s.Dsp.d[31] = 16
+	s.Dsp.(*Display).d[31] = 16
 	s.Key.SetState(0xF)
 	s.Reset()
 	for i := 0; i < 16; i++ {
@@ -24,8 +24,8 @@ func TestReset(t *testing.T) {
 		}
 	}
 	for i := 0; i < 32; i++ {
-		if s.Dsp.d[i] != 0 {
-			t.Errorf("expect display line %d to be 0, got %d", i, s.Dsp.d[i])
+		if s.Dsp.(*Display).d[i] != 0 {
+			t.Errorf("expect display line %d to be 0, got %d", i, s.Dsp.(*Display).d[i])
 		}
 	}
 	if s.PC != 0x200 {

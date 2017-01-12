@@ -21,6 +21,7 @@ type (
 		Draw(x, y, h uint8, sprite []byte) uint8
 		Clear()
 		Line(y uint8) uint64
+		Dump() string
 	}
 
 	// Display represents the display state

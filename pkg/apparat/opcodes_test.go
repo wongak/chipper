@@ -44,6 +44,34 @@ func TestRetStackUnderflow(t *testing.T) {
 	s.executeOpcode()
 }
 
+type testDsp struct {
+	calledClear bool
+}
+
+func (t *testDsp) Clear() {
+	t.calledClear = true
+}
+func (t *testDsp) Draw(x, y, h uint8, sprite []byte) uint8 {
+	return 0
+}
+func (t *testDsp) Line(y uint8) uint64 {
+	return 0
+}
+func (t *testDsp) Dump() string {
+	return ""
+}
+
+func TestCLS(t *testing.T) {
+	s := NewSystem()
+	dsp := &testDsp{}
+	s.Dsp = dsp
+	s.Mem[0x200] = 0x00
+	s.Mem[0x201] = 0xE0
+	s.executeOpcode()
+	if !dsp.calledClear {
+		t.Error("expect clear to be called")
+	}
+}
 func TestJMP(t *testing.T) {
 	s := NewSystem()
 	// program: JMP 0xA10
