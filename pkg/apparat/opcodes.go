@@ -294,9 +294,9 @@ func (o opJP) Execute(s *System) {
 func (o opJP) String() string {
 	switch o.Instruction() {
 	case 0x1:
-		return fmt.Sprintf("JP %X\n", o.ExtractAddr())
+		return fmt.Sprintf("JP 0x%X\n", o.ExtractAddr())
 	case 0xB:
-		return fmt.Sprintf("JP V0, %X\n", o.ExtractAddr())
+		return fmt.Sprintf("JP V0, 0x%X\n", o.ExtractAddr())
 	default:
 		panic("invalid JP")
 	}
@@ -307,7 +307,7 @@ func (o opCALL) Execute(s *System) {
 	s.PC = o.ExtractAddr()
 }
 func (o opCALL) String() string {
-	return fmt.Sprintf("CALL %X\n", o.ExtractAddr())
+	return fmt.Sprintf("CALL 0x%X\n", o.ExtractAddr())
 }
 
 func (o opSE) Execute(s *System) {
@@ -334,7 +334,7 @@ func (o opSE) String() string {
 	switch o.Instruction() {
 	case 0x3:
 		v, cmp := o.ExtractVNN()
-		return fmt.Sprintf("SE V%X, %X\n", v, cmp)
+		return fmt.Sprintf("SE V%X, 0x%X\n", v, cmp)
 	case 0x5:
 		x, y, _ := o.ExtractXYN()
 		return fmt.Sprintf("SE V%X, V%X\n", x, y)
@@ -367,7 +367,7 @@ func (o opSNE) String() string {
 	switch o.Instruction() {
 	case 0x4:
 		v, cmp := o.ExtractVNN()
-		return fmt.Sprintf("SNE V%X, %X\n", v, cmp)
+		return fmt.Sprintf("SNE V%X, 0x%X\n", v, cmp)
 	case 0x9:
 		x, y, _ := o.ExtractXYN()
 		return fmt.Sprintf("SNE V%X, V%X\n", x, y)
@@ -441,7 +441,7 @@ func (o opLD) String() string {
 	switch o.Instruction() {
 	case 0x6:
 		v, val := o.ExtractVNN()
-		return fmt.Sprintf("LD V%X, %X\n", v, val)
+		return fmt.Sprintf("LD V%X, 0x%X\n", v, val)
 	case 0x8:
 		x, y, op := o.ExtractXYN()
 		switch op {
@@ -452,7 +452,7 @@ func (o opLD) String() string {
 		}
 	case 0xA:
 		addr := o.ExtractAddr()
-		return fmt.Sprintf("LD I, %X\n", addr)
+		return fmt.Sprintf("LD I, 0x%X\n", addr)
 	case 0xF:
 		x, n := o.ExtractVNN()
 		switch n {
@@ -511,7 +511,7 @@ func (o opADD) String() string {
 	switch o.Instruction() {
 	case 0x7:
 		v, val := o.ExtractVNN()
-		return fmt.Sprintf("ADD V%X, %X\n", v, val)
+		return fmt.Sprintf("ADD V%X, 0x%X\n", v, val)
 	case 0x8:
 		x, y, _ := o.ExtractXYN()
 		return fmt.Sprintf("ADD V%X, V%X\n", x, y)
@@ -611,7 +611,7 @@ func (o opRND) Execute(s *System) {
 }
 func (o opRND) String() string {
 	x, n := o.ExtractVNN()
-	return fmt.Sprintf("RND V%X, %X\n", x, n)
+	return fmt.Sprintf("RND V%X, 0x%X\n", x, n)
 }
 
 func (o opDRW) Execute(s *System) {
@@ -622,7 +622,7 @@ func (o opDRW) Execute(s *System) {
 }
 func (o opDRW) String() string {
 	x, y, n := o.ExtractXYN()
-	return fmt.Sprintf("DRW V%X, V%X, %X\n", x, y, n)
+	return fmt.Sprintf("DRW V%X, V%X, 0x%X\n", x, y, n)
 }
 
 func (o opSKP) Execute(s *System) {
