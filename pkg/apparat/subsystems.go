@@ -16,6 +16,13 @@ type (
 	// Memory is the 4K CHIP-8 memory
 	Memory [4096]byte
 
+	// Displayer represents a display
+	Displayer interface {
+		Draw(x, y, h uint8, sprite []byte) uint8
+		Clear()
+		Line(y uint8) uint64
+	}
+
 	// Display represents the display state
 	Display struct {
 		RWM *sync.RWMutex
@@ -91,7 +98,7 @@ func NewDisplay() *Display {
 	}
 }
 
-func (d *Display) draw(x, y, h uint8, sprite []byte) uint8 {
+func (d *Display) Draw(x, y, h uint8, sprite []byte) uint8 {
 	d.RWM.Lock()
 	defer d.RWM.Unlock()
 	var flipped uint8

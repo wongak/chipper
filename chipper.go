@@ -43,7 +43,7 @@ func main() {
 	status.Draw()
 	termbox.Flush()
 
-	s.Draw = func(dsp *apparat.Display) {
+	s.Draw = func(dsp apparat.Displayer) {
 		go termbox.Interrupt()
 	}
 

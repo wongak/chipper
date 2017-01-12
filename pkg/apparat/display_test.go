@@ -31,7 +31,7 @@ func TestSpriteFromFontset(t *testing.T) {
 
 func TestDsp(t *testing.T) {
 	dsp := NewDisplay()
-	flipped := dsp.draw(0, 0, 1, []byte{0xFF})
+	flipped := dsp.Draw(0, 0, 1, []byte{0xFF})
 	if flipped != 0 {
 		t.Error("expected no flip")
 	}

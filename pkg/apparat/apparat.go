@@ -42,7 +42,7 @@ type (
 
 		Mem Memory
 
-		Dsp *Display
+		Dsp Displayer
 
 		Timers *Timers
 
@@ -56,7 +56,7 @@ type (
 	// The DrawCall will be called each time the system wants
 	// to update a frame. The display acts like the framebufer.
 	// The call itself should not block.
-	DrawCall func(dsp *Display)
+	DrawCall func(dsp Displayer)
 )
 
 // NewSystem initializes a new system
@@ -67,7 +67,7 @@ func NewSystem() *System {
 		RWM:        &sync.RWMutex{},
 
 		Stop: make(chan struct{}),
-		Draw: func(_ *Display) {},
+		Draw: func(_ Displayer) {},
 
 		rndSource: rand.Reader,
 
@@ -89,7 +89,7 @@ func (s *System) Reset() {
 	s.Stack.Reset()
 
 	s.Mem = NewMemory()
-	s.Dsp.d = [32]uint64{}
+	s.Dsp.Clear()
 	s.Key.Reset()
 
 	s.Timers.Delay = 0

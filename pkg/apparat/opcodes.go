@@ -617,7 +617,7 @@ func (o opRND) String() string {
 func (o opDRW) Execute(s *System) {
 	x, y, n := o.ExtractXYN()
 	sprite := s.Mem[s.I : (s.I+(uint16(n)*8))+1]
-	s.V[0xF] = s.Dsp.draw(s.V[x], s.V[y], n, sprite)
+	s.V[0xF] = s.Dsp.Draw(s.V[x], s.V[y], n, sprite)
 	s.PC += 2
 }
 func (o opDRW) String() string {
