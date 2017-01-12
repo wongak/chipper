@@ -182,7 +182,7 @@ func (o OpCode) Executer() (Executer, error) {
 			panic(fmt.Sprintf("unknown opcode %X", o))
 		}
 	// 0x9XY0: if Vx != Vy
-	// SNE Vx Vy
+	// SNE Vx, Vy
 	case o.Instruction() == 0x9:
 		return opSNE{o}, nil
 	// 0xANNN: set I = NNN

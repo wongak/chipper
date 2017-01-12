@@ -359,12 +359,75 @@ func TestSUB(t *testing.T) {
 	}
 }
 
-func TestShl(t *testing.T) {
+func TestSHR(t *testing.T) {
+	s := NewSystem()
+	s.V[3] = 13
+	s.V[6] = 2
+
+	s.Mem[0x200] = 0x83 // SHR V3
+	s.Mem[0x201] = 0x06
+	s.Mem[0x202] = 0x86 // SHR V6
+	s.Mem[0x203] = 0x06
+
+	s.executeOpcode()
+	if s.V[0xF] != 1 {
+		t.Error("LSB error")
+		return
+	}
+	if s.V[3] != 6 {
+		t.Error("SHR not executed")
+		return
+	}
+	s.executeOpcode()
+	if s.V[0x0] != 0 {
+		t.Error("2 LSB error")
+		return
+	}
+	if s.V[6] != 1 {
+		t.Error("SHR 2 = 1 error")
+		return
+	}
+}
+
+func TestSUBN(t *testing.T) {
+	s := NewSystem()
+
+	s.V[0] = 0x04
+	s.V[1] = 0x01
+	s.V[2] = 0x02
+	s.V[3] = 0x0C
+	copy(s.Mem[0x200:], []byte{
+		0x80, 0x17, // SUBN V0, V1
+		0x82, 0x37, // SUBN V2, V3
+	})
+	s.executeOpcode()
+	if s.V[0] != 0xFD {
+		t.Error("01 - 04 error")
+		return
+	}
+	if s.V[0xF] != 0 {
+		t.Error("wraparound flag error")
+		return
+	}
+	s.executeOpcode()
+	if s.V[2] != 0x0A {
+		t.Error("0C - 02 error")
+		return
+	}
+	if s.V[0xF] != 1 {
+		t.Error("not borrow error")
+		return
+	}
+}
+
+func TestSHL(t *testing.T) {
 	s := NewSystem()
 
 	copy(s.Mem[:], []byte{
-		0x64, 0xA0, // load V4 A0 (1010 0000)
-		0x84, 0x0E, // shl V4
+		0x64, 0xA0, // LD V4, A0 (1010 0000)
+		0x84, 0x0E, // SHL V4
+		0x62, 0x10, // LD V2, 10 (0001 0000)
+		0x82, 0x0E, // SHL V2
 	})
 	s.PC = 0
 	s.executeOpcode()
@@ -376,6 +439,16 @@ func TestShl(t *testing.T) {
 	}
 	if s.V[4] != 0x40 {
 		t.Errorf("expect shifted 0x40, got %X", s.V[4])
+		return
+	}
+	s.executeOpcode()
+	s.executeOpcode()
+	if s.V[0xF] != 0 {
+		t.Error("MSB error")
+		return
+	}
+	if s.V[2] != 32 {
+		t.Error("SHL 16 error")
 		return
 	}
 }
