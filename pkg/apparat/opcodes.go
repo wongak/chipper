@@ -186,11 +186,11 @@ func (o OpCode) Executer() (Executer, error) {
 	case o.Instruction() == 0x9:
 		return opSNE{o}, nil
 	// 0xANNN: set I = NNN
-	// LD I NNN
+	// LD I, NNN
 	case o.Instruction() == 0xA:
 		return opLD{o}, nil
 	// 0xBNNN: jump V0 + NNN
-	// JP 0xNNN v0
+	// JP V0, 0xNNN
 	case o.Instruction() == 0xB:
 		return opJP{o}, nil
 	// 0xCXNN: rand Vx & NN

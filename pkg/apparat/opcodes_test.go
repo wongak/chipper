@@ -453,6 +453,55 @@ func TestSHL(t *testing.T) {
 	}
 }
 
+func TestSNERegs(t *testing.T) {
+	s := NewSystem()
+
+	copy(s.Mem[0x200:], []byte{
+		0x90, 0x10, // SNE V0, V1
+		0x71, 0x05, // LD V1, 0x05
+		0x90, 0x10, // SNE V0, V1
+		0x75, 0x01, // LD V5, 0x01
+		0x75, 0x02, // LD V5, 0x02
+	})
+	s.executeOpcode()
+	s.executeOpcode()
+	if s.V[1] != 5 {
+		t.Error("first SNE error")
+		return
+	}
+	s.executeOpcode()
+	s.executeOpcode()
+	if s.V[5] != 2 {
+		t.Error("second SNE error")
+		return
+	}
+}
+
+func TestLDI(t *testing.T) {
+	s := NewSystem()
+
+	s.Mem[0x200] = 0xA1
+	s.Mem[0x201] = 0x23
+	s.executeOpcode()
+	if s.I != 0x123 {
+		t.Error("error on LD I")
+		return
+	}
+}
+
+func TestJPV0NNN(t *testing.T) {
+	s := NewSystem()
+
+	s.V[0] = 5
+	s.Mem[0x200] = 0xBA // JP V0, A08
+	s.Mem[0x201] = 0x08
+	s.executeOpcode()
+	if s.PC != 0xA0D {
+		t.Error("JP 5 + A08 error")
+		return
+	}
+}
+
 type rndMock struct {
 	w []byte
 }
@@ -461,7 +510,7 @@ func (r rndMock) Read(p []byte) (int, error) {
 	return copy(p, r.w), nil
 }
 
-func TestRnd(t *testing.T) {
+func TestRND(t *testing.T) {
 	s := NewSystem()
 	s.rndSource = rndMock{
 		w: []byte{0xA1},
