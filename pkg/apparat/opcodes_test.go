@@ -72,7 +72,45 @@ func TestCLS(t *testing.T) {
 		t.Error("expect clear to be called")
 	}
 }
-func TestJMP(t *testing.T) {
+
+func TestCALLRET(t *testing.T) {
+	s := NewSystem()
+
+	s.Mem[0x200] = 0x2A // CALL 0xA22
+	s.Mem[0x201] = 0x22
+	s.Mem[0x202] = 0x7E // ADD VE 1
+	s.Mem[0x203] = 0x01
+	s.Mem[0xA22] = 0x6E // LD VE 23
+	s.Mem[0xA23] = 0x23
+	s.Mem[0xA24] = 0x00 // RET
+	s.Mem[0xA25] = 0xEE
+
+	s.executeOpcode()
+	if s.PC != 0xA22 {
+		t.Errorf("expect PC to be 0xA22, got %X", s.PC)
+		return
+	}
+	if s.V[0xE] != 0 {
+		t.Error("VE init err")
+		return
+	}
+	s.executeOpcode()
+	if s.V[0xE] != 0x23 {
+		t.Error("invalid value in VE")
+		return
+	}
+	s.executeOpcode()
+	if s.PC != 0x202 {
+		t.Error("RET call error")
+		return
+	}
+	s.executeOpcode()
+	if s.V[0xE] != 0x24 {
+		t.Error("finish error")
+	}
+}
+
+func TestJP(t *testing.T) {
 	s := NewSystem()
 	// program: JMP 0xA10
 	// opcpde 0x1A10
@@ -89,6 +127,7 @@ func TestSkipIfEq(t *testing.T) {
 	s := NewSystem()
 	s.V[4] = 0xA1
 
+	// SE V4, A1
 	s.Mem[0x200] = 0x34
 	s.Mem[0x201] = 0xA1
 	s.Mem[0x204] = 0x34
@@ -109,12 +148,12 @@ func TestProg(t *testing.T) {
 	s := NewSystem()
 
 	/*
-		0x200 load V0 0xA1
-		0x202 jump 0xA10
-		0xC00 load V1 0xFF
-		0xA10 skip.eq V0 V1
-		0xA12 skip.ne V1 0xFF
-		0xA14 jump 0xC00
+		0x200 LD V0, 0xA1
+		0x202 JP 0xA10
+		0xC00 LD V1, 0xFF
+		0xA10 SE V0, V1
+		0xA12 SNE V1, 0x00
+		0xA14 JP 0xC00
 	*/
 	s.Mem[0x200] = 0x60
 	s.Mem[0x201] = 0xA1
@@ -130,7 +169,7 @@ func TestProg(t *testing.T) {
 
 	s.executeOpcode()
 	if s.V[0] != 0xA1 {
-		t.Errorf("expect SRG 0 A1, got V0 %X", s.V[0])
+		t.Errorf("expect V0 A1, got V0 %X", s.V[0])
 		return
 	}
 	s.executeOpcode()
@@ -155,12 +194,23 @@ func TestProg(t *testing.T) {
 	}
 	s.executeOpcode()
 	if s.V[1] != 0xFF {
-		t.Errorf("expect SRG 1 FF, got V1 %X", s.V[1])
+		t.Errorf("expect V1 FF, got V1 %X", s.V[1])
 		return
 	}
 }
 
-func TestAdd(t *testing.T) {
+func TestSERegisters(t *testing.T) {
+	s := NewSystem()
+	s.Mem[0x200] = 0x50 // SE V0, V1
+	s.Mem[0x201] = 0xA0
+
+	s.executeOpcode()
+	if s.PC != 0x204 {
+		t.Error("SE V0, V1 not executed")
+	}
+}
+
+func TestADD(t *testing.T) {
 	s := NewSystem()
 
 	s.Mem[0x200] = 0x6F // load VF FF
@@ -195,15 +245,98 @@ func TestAdd(t *testing.T) {
 	}
 }
 
-func TestSub(t *testing.T) {
+func TestLDRegisters(t *testing.T) {
+	s := NewSystem()
+	s.V[0xA] = 0xAE
+
+	s.Mem[0x200] = 0x83 // LD V3, VA
+	s.Mem[0x201] = 0xA0
+	s.executeOpcode()
+	if s.V[3] != 0xAE {
+		t.Error("failed LD V3, VA")
+	}
+}
+
+func TestBinaryOps(t *testing.T) {
+	s := NewSystem()
+	s.V[0] = 1
+	s.V[1] = 4
+	s.V[2] = 1
+	s.V[3] = 241
+	s.V[4] = 0xFF
+
+	s.Mem[0x200] = 0x80 // OR V0, V1
+	s.Mem[0x201] = 0x11
+	s.Mem[0x202] = 0x80 // OR V0, V2
+	s.Mem[0x203] = 0x21
+	s.Mem[0x204] = 0x80 // AND V0, V2
+	s.Mem[0x205] = 0x22
+	s.Mem[0x206] = 0x83 // XOR V3, V4
+	s.Mem[0x207] = 0x43
+
+	s.executeOpcode()
+	if s.V[0] != 5 {
+		t.Error("4 OR 1 error")
+		return
+	}
+	s.executeOpcode()
+	if s.V[0] != 5 {
+		t.Error("5 OR 1 error")
+		return
+	}
+	s.executeOpcode()
+	if s.V[0] != 1 {
+		t.Error("5 AND 1 error")
+		return
+	}
+	s.executeOpcode()
+	if s.V[3] != 0xE {
+		t.Error("F1 XOR FF error")
+		return
+	}
+}
+
+func TestADDCarry(t *testing.T) {
+	s := NewSystem()
+	s.V[0] = 0xFE
+	s.V[1] = 0x12
+
+	s.Mem[0x200] = 0x80 // ADD V0, V1
+	s.Mem[0x201] = 0x14
+	s.Mem[0x202] = 0x80
+	s.Mem[0x203] = 0x14
+
+	s.executeOpcode()
+	if s.V[0] != 0x10 {
+		t.Error("ADD FE 12 error")
+		return
+	}
+	if s.V[0xF] != 1 {
+		t.Error("carry flag not set")
+		return
+	}
+	s.executeOpcode()
+	if s.V[0] != 0x22 {
+		t.Error("ADD 10 12 error")
+		return
+	}
+	if s.V[0xF] != 0 {
+		t.Error("carry flag not unset")
+		return
+	}
+}
+
+func TestSUB(t *testing.T) {
 	s := NewSystem()
 
-	s.Mem[0x200] = 0x6A // load VA 02
+	s.Mem[0x200] = 0x6A // LD VA, 02
 	s.Mem[0x201] = 0x02
-	s.Mem[0x202] = 0x6C // load VC 03
+	s.Mem[0x202] = 0x6C // LD VC, 03
 	s.Mem[0x203] = 0x03
-	s.Mem[0x204] = 0x8A // sub VA VC
+	s.Mem[0x204] = 0x8A // SUB VA, VC
 	s.Mem[0x205] = 0xC5
+	s.Mem[0x206] = 0x8A
+	s.Mem[0x207] = 0xC5
 	for i := 0; i < 3; i++ {
 		s.executeOpcode()
 	}
@@ -213,6 +346,15 @@ func TestSub(t *testing.T) {
 	}
 	if s.V[0xF] != 0 {
 		t.Errorf("expect borrow flag to be 0, got %X", s.V[0xF])
+		return
+	}
+	s.executeOpcode()
+	if s.V[0xA] != 0xFC {
+		t.Error("SUB FF 03 error")
+		return
+	}
+	if s.V[0xF] != 1 {
+		t.Error("NOT borrow should be 1")
 		return
 	}
 }
