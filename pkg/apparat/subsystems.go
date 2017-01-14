@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"sync"
+	"sync/atomic"
 )
 
 type (
@@ -32,9 +33,7 @@ type (
 
 	// Keys represents the keyboard state
 	Keys struct {
-		m        *sync.Mutex
-		hasState bool
-		state    uint8
+		keystate uint32
 	}
 )
 
@@ -155,37 +154,23 @@ func (d *Display) Dump() string {
 
 // NewKeys creates a new key state
 func NewKeys() *Keys {
-	return &Keys{
-		m:     &sync.Mutex{},
-		state: 0,
-	}
+	return &Keys{}
 }
 
 // HasState returns true if any key is pressed
 func (k *Keys) HasState() bool {
-	k.m.Lock()
-	defer k.m.Unlock()
-	return k.hasState
+	ks := atomic.LoadUint32(&k.keystate)
+	return ks&0xF0 == 1
 }
 
 // State returns the key state
 func (k *Keys) State() uint8 {
-	k.m.Lock()
-	defer k.m.Unlock()
-	return k.state
+	ks := atomic.LoadUint32(&k.keystate)
+	return uint8(ks) & 0x0F
 }
 
 // SetState sets the new keystate
 func (k *Keys) SetState(s uint8) {
-	k.m.Lock()
-	k.state = s
-	k.hasState = true
-	k.m.Unlock()
-}
-
-// Reset resets the state (no key pressed)
-func (k *Keys) Reset() {
-	k.m.Lock()
-	k.hasState = false
-	k.m.Unlock()
+	ks := uint32(s)
+	atomic.StoreUint32(&k.keystate, ks)
 }

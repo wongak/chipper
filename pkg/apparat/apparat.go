@@ -90,7 +90,6 @@ func (s *System) Reset() {
 
 	s.Mem = NewMemory()
 	s.Dsp.Clear()
-	s.Key.Reset()
 
 	s.Timers.Delay = 0
 	s.Timers.Sound = 0
@@ -168,7 +167,6 @@ func (s *System) Run() {
 		for i := 0; i < s.ops; i++ {
 			s.executeOpcode()
 		}
-		s.Key.Reset()
 		s.RWM.Unlock()
 		// wait for tick
 		// everything, opcodes, drawing, tick and loop
