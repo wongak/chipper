@@ -46,7 +46,7 @@ type (
 
 		Timers *Timers
 
-		Key *Keys
+		Key KeyStater
 	}
 
 	// DrawCall is the connection to the actual implementation
@@ -76,7 +76,7 @@ func NewSystem() *System {
 		Mem:    NewMemory(),
 		Dsp:    NewDisplay(),
 		Timers: &Timers{},
-		Key:    NewKeys(),
+		Key:    defaultKeys{},
 	}
 }
 

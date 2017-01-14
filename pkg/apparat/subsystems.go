@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"sync"
-	"sync/atomic"
 )
 
 type (
@@ -31,10 +30,16 @@ type (
 		d   [32]uint64
 	}
 
-	// Keys represents the keyboard state
-	Keys struct {
-		keystate uint32
+	// KeyStater can report key states
+	// If k & 0xF0 != 0, then report true on any key
+	// Otherwise report true if key 0x0F & k is pressed.
+	KeyStater interface {
+		KeyPressed(k uint8) bool
+		HasState() bool
+		State() uint8
 	}
+
+	defaultKeys struct{}
 )
 
 // Reset resets the stack
@@ -152,25 +157,14 @@ func (d *Display) Dump() string {
 	return hex.Dump(buf)
 }
 
-// NewKeys creates a new key state
-func NewKeys() *Keys {
-	return &Keys{}
+func (k defaultKeys) KeyPressed(_ uint8) bool {
+	return false
 }
 
-// HasState returns true if any key is pressed
-func (k *Keys) HasState() bool {
-	ks := atomic.LoadUint32(&k.keystate)
-	return ks&0xF0 == 1
+func (k defaultKeys) HasState() bool {
+	return false
 }
 
-// State returns the key state
-func (k *Keys) State() uint8 {
-	ks := atomic.LoadUint32(&k.keystate)
-	return uint8(ks) & 0x0F
-}
-
-// SetState sets the new keystate
-func (k *Keys) SetState(s uint8) {
-	ks := uint32(s)
-	atomic.StoreUint32(&k.keystate, ks)
+func (k defaultKeys) State() uint8 {
+	return 0
 }
