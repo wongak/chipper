@@ -538,6 +538,132 @@ func TestRND(t *testing.T) {
 	}
 }
 
+type mockKeyState struct {
+	ks uint8
+}
+
+func (k mockKeyState) KeyPressed(p uint8) bool {
+	return k.ks&0x0F == p
+}
+
+func (k mockKeyState) HasState() bool {
+	return k.ks&0xF0 != 0
+}
+
+func (k mockKeyState) State() uint8 {
+	return k.ks & 0x0F
+}
+
+func TestSKP(t *testing.T) {
+	s := NewSystem()
+
+	s.Key = &mockKeyState{ks: 0x1E}
+	if !s.Key.HasState() {
+		t.Error("has state err")
+		return
+	}
+	if !s.Key.KeyPressed(0x0E) {
+		t.Error("pressed err")
+		return
+	}
+	s.V[1] = 0x0E
+	s.V[2] = 0x01
+	s.Mem[0x200] = 0xE1 // SKP V1
+	s.Mem[0x201] = 0x9E
+	s.Mem[0x204] = 0xA1 // LD I, 0x123
+	s.Mem[0x205] = 0x23
+	s.Mem[0x206] = 0xE2 // SKP V2
+	s.Mem[0x207] = 0x9E
+	s.Mem[0x208] = 0xA5 // LD I, 0x543
+	s.Mem[0x209] = 0x43
+	s.executeOpcode()
+	if s.PC != 0x204 {
+		t.Error("SKP V1 PC err")
+		return
+	}
+	s.executeOpcode()
+	if s.I != 0x123 {
+		t.Error("I reg error")
+		return
+	}
+	s.executeOpcode()
+	if s.PC != 0x208 {
+		t.Error("SKP V2 PC err")
+		return
+	}
+	s.executeOpcode()
+	if s.I != 0x543 {
+		t.Error("SKP no match error")
+		return
+	}
+}
+
+func TestSKNP(t *testing.T) {
+	s := NewSystem()
+	s.Key = &mockKeyState{ks: 0x1A}
+
+	s.V[4] = 0x0A
+	s.V[5] = 0x0B
+	s.Mem[0x200] = 0xE4 // SKNP V4
+	s.Mem[0x201] = 0xA1
+	s.Mem[0x202] = 0xE5 // SKNP V5
+	s.Mem[0x203] = 0xA1
+	s.executeOpcode()
+	s.executeOpcode()
+	if s.PC != 0x206 {
+		t.Error("PC err")
+		return
+	}
+}
+
+func TestDT(t *testing.T) {
+	s := NewSystem()
+	s.V[0] = 1
+	s.V[2] = 2
+
+	copy(s.Mem[0x200:], []byte{
+		0xF0, 0x15, // LD DT, V0
+		0xF1, 0x07, // LD V1, DT
+		0xF2, 0x07, // LD V2, DT
+	})
+	s.executeOpcode()
+	s.executeOpcode()
+	if s.V[1] != 1 {
+		t.Error("no tick delay err V1")
+		return
+	}
+	s.Timers.Tick()
+	s.executeOpcode()
+	if s.V[2] != 0 {
+		t.Error("tick delay err V2")
+		return
+	}
+}
+
+func TestLoadK(t *testing.T) {
+	s := NewSystem()
+	s.Key = &mockKeyState{0x01}
+
+	s.Mem[0x200] = 0xF0 // LD V0, K
+	s.Mem[0x201] = 0x0A
+
+	s.executeOpcode()
+	if s.PC != 0x200 {
+		t.Error("PC err if no key pressed")
+		return
+	}
+	s.Key.(*mockKeyState).ks = 0x12
+	s.executeOpcode()
+	if s.PC != 0x202 {
+		t.Error("PC err if key pressed")
+		return
+	}
+	if s.V[0] != 2 {
+		t.Error("wrong key state stored")
+		return
+	}
+}
+
 func TestLoadRestoreReg(t *testing.T) {
 	s := NewSystem()
 	// test data

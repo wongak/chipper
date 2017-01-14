@@ -179,7 +179,7 @@ func (o OpCode) Executer() (Executer, error) {
 		case 0xE:
 			return opSHL{o}, nil
 		default:
-			panic(fmt.Sprintf("unknown opcode %X", o))
+			return nil, fmt.Errorf("unknown opcode %X", o)
 		}
 	// 0x9XY0: if Vx != Vy
 	// SNE Vx, Vy
@@ -210,11 +210,11 @@ func (o OpCode) Executer() (Executer, error) {
 		case 0x9E:
 			return opSKP{o}, nil
 		// 0xEXA1: if(key()!=Vx)
-		// skip.ne Vx, key
+		// SKNP Vx
 		case 0xA1:
 			return opSKNP{o}, nil
 		default:
-			panic(fmt.Sprintf("unknown opcode %X", o))
+			return nil, fmt.Errorf("unknown opcode %X", o)
 		}
 	// the 0xFXNN group
 	case o.Instruction() == 0xF:
@@ -627,7 +627,7 @@ func (o opDRW) String() string {
 
 func (o opSKP) Execute(s *System) {
 	x, _ := o.ExtractVNN()
-	if s.Key.HasState() && s.V[x]&s.Key.State() != 0 {
+	if s.Key.HasState() && s.Key.KeyPressed(s.V[x]) {
 		s.PC += 4
 		return
 	}
@@ -640,7 +640,7 @@ func (o opSKP) String() string {
 
 func (o opSKNP) Execute(s *System) {
 	x, _ := o.ExtractVNN()
-	if s.Key.HasState() && s.V[x]&s.Key.State() == 0 {
+	if s.Key.HasState() && !s.Key.KeyPressed(s.V[x]) {
 		s.PC += 4
 		return
 	}
