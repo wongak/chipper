@@ -108,7 +108,7 @@ func (o OpCode) Executer() (Executer, error) {
 	case 0x00E0 == o:
 		return opCLS{o}, nil
 	// 0x00EE: return from a subroutine
-	// ret
+	// RET
 	case 0x00EE == o:
 		return opRET{o}, nil
 	// 0x1NNN: JUMP
