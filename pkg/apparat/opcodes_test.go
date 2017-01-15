@@ -664,6 +664,69 @@ func TestLoadK(t *testing.T) {
 	}
 }
 
+func TestADDIVX(t *testing.T) {
+	s := NewSystem()
+
+	copy(s.Mem[0x200:], []byte{
+		0xA0, 0x42, // LD I, 0x042
+		0x61, 0x08, // LD V1, 0x08
+		0xF1, 0x1E, // ADD I, V1
+	})
+	s.executeOpcode()
+	s.executeOpcode()
+	s.executeOpcode()
+	if s.I != 0x04A {
+		t.Error("ADD I, V1 err")
+		return
+	}
+}
+
+func TestLoadF(t *testing.T) {
+	s := NewSystem()
+
+	copy(s.Mem[0x200:], []byte{
+		0xF0, 0x29, // LD F, V0
+		0x60, 0x01, // LD V0, 0x01
+		0xF0, 0x29, // LD F, V0
+	})
+	s.executeOpcode()
+	if s.I != fontsetStartAddress {
+		t.Error("error font start")
+		return
+	}
+	s.executeOpcode()
+	s.executeOpcode()
+	if s.I != fontsetStartAddress+fontSize {
+		t.Error("error font +1")
+		return
+	}
+}
+
+func TestLoadB(t *testing.T) {
+	s := NewSystem()
+
+	copy(s.Mem[0x200:], []byte{
+		0xA3, 0x00, // LD I, 0x300
+		0x60, 0x7B, // LD V0, 0x7B
+		0xF0, 0x33, // LD B, V0
+	})
+	for i := 0; i < 3; i++ {
+		s.executeOpcode()
+	}
+	if s.Mem[0x300] != 1 {
+		t.Error("expect decimal 1")
+		return
+	}
+	if s.Mem[0x301] != 2 {
+		t.Error("expect decimal 2")
+		return
+	}
+	if s.Mem[0x302] != 3 {
+		t.Error("expect decimal 3")
+		return
+	}
+}
+
 func TestLoadRestoreReg(t *testing.T) {
 	s := NewSystem()
 	// test data
