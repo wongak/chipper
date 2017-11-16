@@ -20,6 +20,7 @@ import (
 	"fmt"
 	_ "image/png"
 	"log"
+	"math"
 	"math/rand"
 
 	"github.com/hajimehoshi/ebiten"
@@ -29,12 +30,11 @@ import (
 const (
 	screenWidth  = 320
 	screenHeight = 240
+	maxAngle     = 256
 )
 
 var (
-	ebitenImage       *ebiten.Image
-	ebitenImageWidth  = 0
-	ebitenImageHeight = 0
+	ebitenImage *ebiten.Image
 )
 
 type Sprite struct {
@@ -44,6 +44,7 @@ type Sprite struct {
 	y           int
 	vx          int
 	vy          int
+	angle       int
 }
 
 func (s *Sprite) Update() {
@@ -63,6 +64,8 @@ func (s *Sprite) Update() {
 		s.y = 2*(screenHeight-s.imageHeight) - s.y
 		s.vy = -s.vy
 	}
+	s.angle++
+	s.angle %= maxAngle
 }
 
 type Sprites struct {
@@ -76,31 +79,15 @@ func (s *Sprites) Update() {
 	}
 }
 
-func (s *Sprites) Len() int {
-	return s.num
-}
-
-func (s *Sprites) Dst(i int) (x0, y0, x1, y1 int) {
-	if s.num <= i {
-		return 0, 0, 0, 0
-	}
-	ss := s.sprites[i]
-	return ss.x, ss.y, ss.x + ebitenImageWidth, ss.y + ebitenImageHeight
-}
-
-func (s *Sprites) Src(i int) (x0, y0, x1, y1 int) {
-	if s.num <= i {
-		return 0, 0, 0, 0
-	}
-	return 0, 0, ebitenImageWidth, ebitenImageHeight
-}
-
 const (
 	MinSprites = 0
 	MaxSprites = 50000
 )
 
-var sprites = &Sprites{make([]*Sprite, MaxSprites), 500}
+var (
+	sprites = &Sprites{make([]*Sprite, MaxSprites), 500}
+	op      = &ebiten.DrawImageOptions{}
+)
 
 func update(screen *ebiten.Image) error {
 	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
@@ -120,33 +107,39 @@ func update(screen *ebiten.Image) error {
 	if ebiten.IsRunningSlowly() {
 		return nil
 	}
-	op := &ebiten.DrawImageOptions{
-		ImageParts: sprites,
-	}
-	op.ColorM.Scale(1.0, 1.0, 1.0, 0.5)
-	if err := screen.DrawImage(ebitenImage, op); err != nil {
-		return err
+	w, h := ebitenImage.Size()
+	for i := 0; i < sprites.num; i++ {
+		s := sprites.sprites[i]
+		op.GeoM.Reset()
+		op.GeoM.Translate(-float64(w)/2, -float64(h)/2)
+		op.GeoM.Rotate(2 * math.Pi * float64(s.angle) / maxAngle)
+		op.GeoM.Translate(float64(w)/2, float64(h)/2)
+		op.GeoM.Translate(float64(s.x), float64(s.y))
+		screen.DrawImage(ebitenImage, op)
 	}
 	msg := fmt.Sprintf(`FPS: %0.2f
 Num of sprites: %d
-Press <- or -> to change the number of sprites`, ebiten.CurrentFPS(), sprites.Len())
-	if err := ebitenutil.DebugPrint(screen, msg); err != nil {
-		return err
-	}
+Press <- or -> to change the number of sprites`, ebiten.CurrentFPS(), sprites.num)
+	ebitenutil.DebugPrint(screen, msg)
 	return nil
 }
 
 func main() {
 	var err error
-	ebitenImage, _, err = ebitenutil.NewImageFromFile("_resources/images/ebiten.png", ebiten.FilterNearest)
+	img, _, err := ebitenutil.NewImageFromFile("_resources/images/ebiten.png", ebiten.FilterNearest)
 	if err != nil {
 		log.Fatal(err)
 	}
-	ebitenImageWidth, ebitenImageHeight = ebitenImage.Size()
+	w, h := img.Size()
+	ebitenImage, _ = ebiten.NewImage(w, h, ebiten.FilterNearest)
+	op := &ebiten.DrawImageOptions{}
+	op.ColorM.Scale(1, 1, 1, 0.5)
+	ebitenImage.DrawImage(img, op)
 	for i := range sprites.sprites {
 		w, h := ebitenImage.Size()
 		x, y := rand.Intn(screenWidth-w), rand.Intn(screenHeight-h)
 		vx, vy := 2*rand.Intn(2)-1, 2*rand.Intn(2)-1
+		a := rand.Intn(maxAngle)
 		sprites.sprites[i] = &Sprite{
 			imageWidth:  w,
 			imageHeight: h,
@@ -154,6 +147,7 @@ func main() {
 			y:           y,
 			vx:          vx,
 			vy:          vy,
+			angle:       a,
 		}
 	}
 	if err := ebiten.Run(update, screenWidth, screenHeight, 2, "Sprites (Ebiten Demo)"); err != nil {

@@ -21,7 +21,6 @@ import (
 	"image/color"
 	"image/draw"
 	"math"
-	"strings"
 
 	"github.com/hajimehoshi/ebiten"
 	"github.com/hajimehoshi/ebiten/examples/common/internal/assets"
@@ -51,54 +50,39 @@ func (f *Font) TextHeight(str string) int {
 }
 
 func init() {
-	img, err := assets.ArcadeFontImage()
-	if err != nil {
-		panic(err)
-	}
-	eimg, err := ebiten.NewImageFromImage(img, ebiten.FilterNearest)
-	if err != nil {
-		panic(err)
-	}
+	img := assets.ArcadeFontImage()
+	eimg, _ := ebiten.NewImageFromImage(img, ebiten.FilterNearest)
 	ArcadeFont = &Font{eimg, img, 32, 16, 8, 8}
 }
 
-type fontImageParts struct {
-	str  string
-	font *Font
+type part struct {
+	sx, sy, dx0, dy0, dx1, dy1 int
 }
 
-func (f *fontImageParts) Len() int {
-	return len(f.str)
-}
-
-func (f *fontImageParts) Dst(i int) (x0, y0, x1, y1 int) {
-	x := i - strings.LastIndex(f.str[:i], "\n") - 1
-	y := strings.Count(f.str[:i], "\n")
-	x *= f.font.charWidth
-	y *= f.font.charHeight
-	if x < 0 {
-		return 0, 0, 0, 0
+func (f *Font) parts(str string) []part {
+	ps := []part{}
+	x := 0
+	y := 0
+	for _, c := range str {
+		if c == '\n' {
+			x = 0
+			y += f.charHeight
+			continue
+		}
+		sx := (int(c) % f.charNumPerLine) * f.charWidth
+		sy := ((int(c) - f.offset) / f.charNumPerLine) * f.charHeight
+		dx0 := x
+		dy0 := y
+		dx1 := dx0 + f.charWidth
+		dy1 := dy0 + f.charHeight
+		ps = append(ps, part{sx, sy, dx0, dy0, dx1, dy1})
+		x += f.charWidth
 	}
-	return x, y, x + f.font.charWidth, y + f.font.charHeight
+	return ps
 }
 
-func (f *fontImageParts) Src(i int) (x0, y0, x1, y1 int) {
-	code := int(f.str[i])
-	if code == '\n' {
-		return 0, 0, 0, 0
-	}
-	x := (code % f.font.charNumPerLine) * f.font.charWidth
-	y := ((code - f.font.offset) / f.font.charNumPerLine) * f.font.charHeight
-	return x, y, x + f.font.charWidth, y + f.font.charHeight
-}
-
-func (f *Font) DrawText(rt *ebiten.Image, str string, ox, oy, scale int, c color.Color) error {
-	options := &ebiten.DrawImageOptions{
-		ImageParts: &fontImageParts{str, f},
-	}
-	options.GeoM.Scale(float64(scale), float64(scale))
-	options.GeoM.Translate(float64(ox), float64(oy))
-
+func (f *Font) DrawText(rt *ebiten.Image, str string, ox, oy, scale int, c color.Color) {
+	op := &ebiten.DrawImageOptions{}
 	ur, ug, ub, ua := c.RGBA()
 	const max = math.MaxUint16
 	r := float64(ur) / max
@@ -110,27 +94,41 @@ func (f *Font) DrawText(rt *ebiten.Image, str string, ox, oy, scale int, c color
 		g /= a
 		b /= a
 	}
-	options.ColorM.Scale(r, g, b, a)
+	op.ColorM.Scale(r, g, b, a)
 
-	return rt.DrawImage(f.image, options)
+	// TODO: There is same logic in parts. Refactor this.
+	x := 0
+	y := 0
+	for _, c := range str {
+		if c == '\n' {
+			x = 0
+			y += f.charHeight
+			continue
+		}
+		sx := (int(c) % f.charNumPerLine) * f.charWidth
+		sy := ((int(c) - f.offset) / f.charNumPerLine) * f.charHeight
+		r := image.Rect(sx, sy, sx+f.charWidth, sy+f.charHeight)
+		op.SourceRect = &r
+		op.GeoM.Reset()
+		op.GeoM.Translate(float64(x), float64(y))
+		op.GeoM.Scale(float64(scale), float64(scale))
+		op.GeoM.Translate(float64(ox), float64(oy))
+		rt.DrawImage(f.image, op)
+		x += f.charWidth
+	}
 }
 
-func (f *Font) DrawTextOnImage(rt draw.Image, str string, ox, oy int) error {
-	parts := &fontImageParts{str, f}
-	for i := 0; i < parts.Len(); i++ {
-		dx0, dy0, dx1, dy1 := parts.Dst(i)
-		sx0, sy0, _, _ := parts.Src(i)
-		draw.Draw(rt, image.Rect(dx0+ox, dy0+oy, dx1+ox, dy1+oy), f.origImage, image.Pt(sx0, sy0), draw.Over)
+func (f *Font) DrawTextOnImage(rt draw.Image, str string, ox, oy int) {
+	// TODO: This function is needed only by examples/keyboard/keyboard.
+	// This is executed without Ebiten, so ebiten.Image can't be used.
+	// When ebiten.Image can be used without ebiten.Run, this function can be removed.
+	for _, p := range f.parts(str) {
+		draw.Draw(rt, image.Rect(p.dx0+ox, p.dy0+oy, p.dx1+ox, p.dy1+oy),
+			f.origImage, image.Pt(p.sx, p.sy), draw.Over)
 	}
-	return nil
 }
 
-func (f *Font) DrawTextWithShadow(rt *ebiten.Image, str string, x, y, scale int, clr color.Color) error {
-	if err := f.DrawText(rt, str, x+1, y+1, scale, color.NRGBA{0, 0, 0, 0x80}); err != nil {
-		return err
-	}
-	if err := f.DrawText(rt, str, x, y, scale, clr); err != nil {
-		return err
-	}
-	return nil
+func (f *Font) DrawTextWithShadow(rt *ebiten.Image, str string, x, y, scale int, clr color.Color) {
+	f.DrawText(rt, str, x+1, y+1, scale, color.NRGBA{0, 0, 0, 0x80})
+	f.DrawText(rt, str, x, y, scale, clr)
 }

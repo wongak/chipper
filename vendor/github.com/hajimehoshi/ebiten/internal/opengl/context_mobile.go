@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build android ios darwin,arm darwin,arm64
+// +build android ios
 
 package opengl
 
@@ -72,10 +72,10 @@ type context struct {
 	worker mgl.Worker
 }
 
-func NewContext() (*Context, error) {
+func Init() {
 	c := &Context{}
 	c.gl, c.worker = mgl.NewContext()
-	return c, nil
+	theContext = c
 }
 
 func (c *Context) DoWork(chError <-chan error, chDone <-chan struct{}) error {

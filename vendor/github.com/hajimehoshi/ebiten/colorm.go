@@ -33,10 +33,15 @@ type ColorM struct {
 	impl affine.ColorM
 }
 
+// Reset resets the ColorM as identity.
+func (c *ColorM) Reset() {
+	c.impl.Reset()
+}
+
 // Concat multiplies a color matrix with the other color matrix.
 // This is same as muptiplying the matrix other and the matrix c in this order.
 func (c *ColorM) Concat(other ColorM) {
-	c.impl.Concat(other.impl)
+	c.impl.Concat(&other.impl)
 }
 
 // Add is deprecated as of 1.5.0-alpha.
@@ -72,7 +77,7 @@ func (c *ColorM) ChangeHSV(hueTheta float64, saturationScale float64, valueScale
 
 // Element returns a value of a matrix at (i, j).
 func (c *ColorM) Element(i, j int) float64 {
-	return c.impl.Element(i, j)
+	return c.impl.UnsafeElements()[i*affine.ColorMDim+j]
 }
 
 // SetElement sets an element at (i, j).

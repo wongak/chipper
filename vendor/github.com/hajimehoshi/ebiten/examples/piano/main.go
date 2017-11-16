@@ -81,20 +81,15 @@ func toBytes(l, r []int16) []byte {
 	return b
 }
 
-func addNote(freq float64, vol float64) error {
+func addNote(freq float64, vol float64) {
 	// TODO: Call Close method of *audio.Player.
 	// However, this works without Close because Close is automatically called when GC
 	// collects a *audio.Player object.
 	f := int(freq)
 	if n, ok := noteCache[f]; ok {
-		p, err := audio.NewPlayerFromBytes(audioContext, n)
-		if err != nil {
-			return err
-		}
-		if err := p.Play(); err != nil {
-			return err
-		}
-		return nil
+		p, _ := audio.NewPlayerFromBytes(audioContext, n)
+		p.Play()
+		return
 	}
 	length := len(pcm) * baseFreq / f
 	l := make([]int16, length)
@@ -110,14 +105,9 @@ func addNote(freq float64, vol float64) error {
 	}
 	n := toBytes(l, r)
 	noteCache[f] = n
-	p, err := audio.NewPlayerFromBytes(audioContext, n)
-	if err != nil {
-		return err
-	}
-	if err := p.Play(); err != nil {
-		return err
-	}
-	return nil
+	p, _ := audio.NewPlayerFromBytes(audioContext, n)
+	p.Play()
+	return
 }
 
 var keys = []ebiten.Key{
@@ -162,18 +152,9 @@ var (
 )
 
 func init() {
-	var err error
-	imageEmpty, err := ebiten.NewImage(16, 16, ebiten.FilterNearest)
-	if err != nil {
-		panic(err)
-	}
-	if err := imageEmpty.Fill(color.White); err != nil {
-		panic(err)
-	}
-	imagePiano, err = ebiten.NewImage(screenWidth, screenHeight, ebiten.FilterNearest)
-	if err != nil {
-		panic(err)
-	}
+	imageEmpty, _ := ebiten.NewImage(16, 16, ebiten.FilterNearest)
+	imageEmpty.Fill(color.White)
+	imagePiano, _ = ebiten.NewImage(screenWidth, screenHeight, ebiten.FilterNearest)
 	whiteKeys := []string{"A", "S", "D", "F", "G", "H", "J", "K", "L"}
 	width := 24
 	y := 48
@@ -185,12 +166,8 @@ func init() {
 		op.GeoM.Scale(float64(width-1)/float64(w), float64(height)/float64(h))
 		op.GeoM.Translate(float64(x), float64(y))
 		op.ColorM.Scale(1, 1, 1, 1)
-		if err := imagePiano.DrawImage(imageEmpty, op); err != nil {
-			panic(err)
-		}
-		if err := common.ArcadeFont.DrawText(imagePiano, k, x+8, y+height-16, 1, color.Black); err != nil {
-			panic(err)
-		}
+		imagePiano.DrawImage(imageEmpty, op)
+		common.ArcadeFont.DrawText(imagePiano, k, x+8, y+height-16, 1, color.Black)
 	}
 
 	blackKeys := []string{"Q", "W", "", "R", "T", "", "U", "I", "O"}
@@ -205,12 +182,8 @@ func init() {
 		op.GeoM.Scale(float64(width-1)/float64(w), float64(height)/float64(h))
 		op.GeoM.Translate(float64(x), float64(y))
 		op.ColorM.Scale(0, 0, 0, 1)
-		if err := imagePiano.DrawImage(imageEmpty, op); err != nil {
-			panic(err)
-		}
-		if err := common.ArcadeFont.DrawText(imagePiano, k, x+8, y+height-16, 1, color.White); err != nil {
-			panic(err)
-		}
+		imagePiano.DrawImage(imageEmpty, op)
+		common.ArcadeFont.DrawText(imagePiano, k, x+8, y+height-16, 1, color.White)
 	}
 }
 
@@ -220,25 +193,18 @@ func update(screen *ebiten.Image) error {
 		if keyStates[key] != 1 {
 			continue
 		}
-		if err := addNote(220*math.Exp2(float64(i-1)/12.0), 1.0); err != nil {
-			return err
-		}
+		addNote(220*math.Exp2(float64(i-1)/12.0), 1.0)
 	}
-
-	if err := screen.Fill(color.RGBA{0x80, 0x80, 0xc0, 0xff}); err != nil {
-		return err
-	}
-	if err := screen.DrawImage(imagePiano, nil); err != nil {
-		return err
-	}
-
-	if err := ebitenutil.DebugPrint(screen, fmt.Sprintf("FPS: %0.2f", ebiten.CurrentFPS())); err != nil {
-		return err
-	}
-
 	if err := audioContext.Update(); err != nil {
 		return err
 	}
+	if ebiten.IsRunningSlowly() {
+		return nil
+	}
+	screen.Fill(color.RGBA{0x80, 0x80, 0xc0, 0xff})
+	screen.DrawImage(imagePiano, nil)
+
+	ebitenutil.DebugPrint(screen, fmt.Sprintf("FPS: %0.2f", ebiten.CurrentFPS()))
 	return nil
 }
 

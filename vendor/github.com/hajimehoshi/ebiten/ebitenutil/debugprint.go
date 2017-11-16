@@ -15,42 +15,13 @@
 package ebitenutil
 
 import (
-	"github.com/hajimehoshi/ebiten"
-	"github.com/hajimehoshi/ebiten/ebitenutil/internal/assets"
+	"image"
 	"image/color"
 	"math"
-	"strings"
+
+	"github.com/hajimehoshi/ebiten"
+	"github.com/hajimehoshi/ebiten/ebitenutil/internal/assets"
 )
-
-type debugPrintImageParts string
-
-func (f debugPrintImageParts) Len() int {
-	return len(f)
-}
-
-func (f debugPrintImageParts) Dst(i int) (x0, y0, x1, y1 int) {
-	cw, ch := assets.TextImageCharWidth, assets.TextImageCharHeight
-	x := i - strings.LastIndex(string(f)[:i], "\n") - 1
-	y := strings.Count(string(f)[:i], "\n")
-	x *= cw
-	y *= ch
-	if x < 0 {
-		return 0, 0, 0, 0
-	}
-	return x, y, x + cw, y + ch
-}
-
-func (f debugPrintImageParts) Src(i int) (x0, y0, x1, y1 int) {
-	cw, ch := assets.TextImageCharWidth, assets.TextImageCharHeight
-	const n = assets.TextImageWidth / assets.TextImageCharWidth
-	code := int(f[i])
-	if code == '\n' {
-		return 0, 0, 0, 0
-	}
-	x := (code % n) * cw
-	y := (code / n) * ch
-	return x, y, x + cw, y + ch
-}
 
 type debugPrintState struct {
 	textImage              *ebiten.Image
@@ -60,11 +31,15 @@ type debugPrintState struct {
 var defaultDebugPrintState = &debugPrintState{}
 
 // DebugPrint draws the string str on the image.
+//
+// DebugPrint always returns nil as of 1.5.0-alpha.
 func DebugPrint(image *ebiten.Image, str string) error {
-	return defaultDebugPrintState.DebugPrint(image, str)
+	defaultDebugPrintState.DebugPrint(image, str)
+	return nil
 }
 
-func (d *debugPrintState) drawText(rt *ebiten.Image, str string, x, y int, c color.Color) error {
+func (d *debugPrintState) drawText(rt *ebiten.Image, str string, ox, oy int, c color.Color) {
+	op := &ebiten.DrawImageOptions{}
 	ur, ug, ub, ua := c.RGBA()
 	const max = math.MaxUint16
 	r := float64(ur) / max
@@ -76,42 +51,40 @@ func (d *debugPrintState) drawText(rt *ebiten.Image, str string, x, y int, c col
 		g /= a
 		b /= a
 	}
-	op := &ebiten.DrawImageOptions{
-		ImageParts: debugPrintImageParts(str),
-	}
-	op.GeoM.Translate(float64(x+1), float64(y))
 	op.ColorM.Scale(r, g, b, a)
-	if err := rt.DrawImage(d.textImage, op); err != nil {
-		return err
+	x := 0
+	y := 0
+	for _, c := range str {
+		const cw = assets.TextImageCharWidth
+		const ch = assets.TextImageCharHeight
+		if c == '\n' {
+			x = 0
+			y += ch
+			continue
+		}
+		const n = assets.TextImageWidth / cw
+		sx := (int(c) % n) * cw
+		sy := (int(c) / n) * ch
+		r := image.Rect(sx, sy, sx+cw, sy+ch)
+		op.SourceRect = &r
+		op.GeoM.Reset()
+		op.GeoM.Translate(float64(x), float64(y))
+		op.GeoM.Translate(float64(ox+1), float64(oy))
+		_ = rt.DrawImage(d.textImage, op)
+		x += cw
 	}
-	return nil
 }
 
 // DebugPrint prints the given text str on the given image r.
-func (d *debugPrintState) DebugPrint(r *ebiten.Image, str string) error {
+func (d *debugPrintState) DebugPrint(r *ebiten.Image, str string) {
 	if d.textImage == nil {
-		img, err := assets.TextImage()
-		if err != nil {
-			return err
-		}
-		d.textImage, err = ebiten.NewImageFromImage(img, ebiten.FilterNearest)
-		if err != nil {
-			return err
-		}
+		img := assets.TextImage()
+		d.textImage, _ = ebiten.NewImageFromImage(img, ebiten.FilterNearest)
 	}
 	if d.debugPrintRenderTarget == nil {
 		width, height := 256, 256
-		var err error
-		d.debugPrintRenderTarget, err = ebiten.NewImage(width, height, ebiten.FilterNearest)
-		if err != nil {
-			return err
-		}
+		d.debugPrintRenderTarget, _ = ebiten.NewImage(width, height, ebiten.FilterNearest)
 	}
-	if err := d.drawText(r, str, 1, 1, color.NRGBA{0x00, 0x00, 0x00, 0x80}); err != nil {
-		return err
-	}
-	if err := d.drawText(r, str, 0, 0, color.NRGBA{0xff, 0xff, 0xff, 0xff}); err != nil {
-		return err
-	}
-	return nil
+	d.drawText(r, str, 1, 1, color.NRGBA{0x00, 0x00, 0x00, 0x80})
+	d.drawText(r, str, 0, 0, color.NRGBA{0xff, 0xff, 0xff, 0xff})
 }

@@ -21,17 +21,13 @@ import (
 	"io"
 
 	"github.com/hajimehoshi/ebiten/audio"
-	"github.com/hajimehoshi/ebiten/audio/internal/resampling"
+	"github.com/hajimehoshi/ebiten/audio/internal/convert"
 )
-
-type readSeekCloseSizer interface {
-	audio.ReadSeekCloser
-	Size() int64
-}
 
 // Stream is a decoded audio stream.
 type Stream struct {
-	inner readSeekCloseSizer
+	inner audio.ReadSeekCloser
+	size  int64
 }
 
 // Read is implementation of io.Reader's Read.
@@ -53,7 +49,7 @@ func (s *Stream) Close() error {
 
 // Size returns the size of decoded stream in bytes.
 func (s *Stream) Size() int64 {
-	return s.inner.Size()
+	return s.size
 }
 
 type stream struct {
@@ -78,8 +74,13 @@ func (s *stream) Read(p []byte) (int, error) {
 
 // Seek is implementation of io.Seeker's Seek.
 func (s *stream) Seek(offset int64, whence int) (int64, error) {
-	if whence == io.SeekStart {
-		offset += s.headerSize
+	switch whence {
+	case io.SeekStart:
+		offset = offset + s.headerSize
+	case io.SeekCurrent:
+	case io.SeekEnd:
+		offset = s.headerSize + s.dataSize + offset
+		whence = io.SeekStart
 	}
 	n, err := s.src.Seek(offset, whence)
 	if err != nil {
@@ -109,7 +110,10 @@ func (s *stream) Size() int64 {
 
 // Decode decodes WAV (RIFF) data to playable stream.
 //
-// The format must be 2 channels, 16bit little endian PCM.
+// The format must be 1 or 2 channels, 8bit or 16bit little endian PCM.
+// The format is converted into 2 channels and 16bit.
+//
+// Decode returns error when the source format is wrong.
 //
 // Sample rate is automatically adjusted to fit with the audio context.
 func Decode(context *audio.Context, src audio.ReadSeekCloser) (*Stream, error) {
@@ -130,9 +134,11 @@ func Decode(context *audio.Context, src audio.ReadSeekCloser) (*Stream, error) {
 
 	// Read chunks
 	dataSize := int64(0)
-	headerSize := int64(0)
+	headerSize := int64(len(buf))
 	sampleRateFrom := 0
 	sampleRateTo := 0
+	mono := false
+	bitsPerSample := 0
 chunks:
 	for {
 		buf := make([]byte, 8)
@@ -147,7 +153,8 @@ chunks:
 		size := int64(buf[4]) | int64(buf[5])<<8 | int64(buf[6])<<16 | int64(buf[7])<<24
 		switch {
 		case bytes.Equal(buf[0:4], []byte("fmt ")):
-			if size != 16 {
+			// Size of 'fmt' header is usually 16, but can be more than 16.
+			if size < 16 {
 				return nil, fmt.Errorf("wav: invalid header: maybe non-PCM file?")
 			}
 			buf := make([]byte, size)
@@ -163,14 +170,17 @@ chunks:
 				return nil, fmt.Errorf("wav: format must be linear PCM")
 			}
 			channelNum := int(buf[2]) | int(buf[3])<<8
-			// TODO: Remove this magic number
-			if channelNum != 2 {
-				return nil, fmt.Errorf("wav: channel num must be 2")
+			switch channelNum {
+			case 1:
+				mono = true
+			case 2:
+				mono = false
+			default:
+				return nil, fmt.Errorf("wav: channel num must be 1 or 2 but was %d", channelNum)
 			}
-			bitsPerSample := int(buf[14]) | int(buf[15])<<8
-			// TODO: Remove this magic number
-			if bitsPerSample != 16 {
-				return nil, fmt.Errorf("wav: bits per sample must be 16")
+			bitsPerSample = int(buf[14]) | int(buf[15])<<8
+			if bitsPerSample != 8 && bitsPerSample != 16 {
+				return nil, fmt.Errorf("wav: bits per sample must be 8 or 16 but was %d", bitsPerSample)
 			}
 			sampleRate := int64(buf[4]) | int64(buf[5])<<8 | int64(buf[6])<<16 | int64(buf[7])<<24
 			if int64(context.SampleRate()) != sampleRate {
@@ -193,15 +203,25 @@ chunks:
 			headerSize += size
 		}
 	}
-	s := &stream{
+	var s audio.ReadSeekCloser = &stream{
 		src:        src,
 		headerSize: headerSize,
 		dataSize:   dataSize,
 		remaining:  dataSize,
 	}
-	if sampleRateFrom != sampleRateTo {
-		fixed := resampling.NewStream(s, s.dataSize, sampleRateFrom, sampleRateTo)
-		return &Stream{fixed}, nil
+	if mono || bitsPerSample != 16 {
+		s = convert.NewStereo16(s, mono, bitsPerSample != 16)
+		if mono {
+			dataSize *= 2
+		}
+		if bitsPerSample != 16 {
+			dataSize *= 2
+		}
 	}
-	return &Stream{s}, nil
+	if sampleRateFrom != sampleRateTo {
+		r := convert.NewResampling(s, dataSize, sampleRateFrom, sampleRateTo)
+		s = r
+		dataSize = r.Size()
+	}
+	return &Stream{inner: s, size: dataSize}, nil
 }

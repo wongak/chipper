@@ -27,17 +27,15 @@ import (
 var canvas *js.Object
 
 type userInterface struct {
-	scale           float64
-	deviceScale     float64
-	sizeChanged     bool
-	contextRestored bool
-	windowFocus     bool
+	scale       float64
+	deviceScale float64
+	sizeChanged bool
+	windowFocus bool
 }
 
 var currentUI = &userInterface{
-	sizeChanged:     true,
-	contextRestored: true,
-	windowFocus:     true,
+	sizeChanged: true,
+	windowFocus: true,
 }
 
 // NOTE: This returns true even when the browser is not active.
@@ -45,13 +43,13 @@ func shown() bool {
 	return !js.Global.Get("document").Get("hidden").Bool()
 }
 
-func SetScreenSize(width, height int) (bool, error) {
-	return currentUI.setScreenSize(width, height, currentUI.scale), nil
+func SetScreenSize(width, height int) bool {
+	return currentUI.setScreenSize(width, height, currentUI.scale)
 }
 
-func SetScreenScale(scale float64) (bool, error) {
+func SetScreenScale(scale float64) bool {
 	width, height := currentUI.size()
-	return currentUI.setScreenSize(width, height, scale), nil
+	return currentUI.setScreenSize(width, height, scale)
 }
 
 func ScreenScale() float64 {
@@ -74,16 +72,15 @@ func (u *userInterface) update(g GraphicsContext) error {
 	if !u.windowFocus {
 		return nil
 	}
-	if !u.contextRestored {
-		return nil
+	if opengl.GetContext().IsContextLost() {
+		opengl.GetContext().RestoreContext()
+		g.Invalidate()
 	}
 	currentInput.updateGamepads()
 	if u.sizeChanged {
 		u.sizeChanged = false
 		w, h := u.size()
-		if err := g.SetSize(w, h, u.actualScreenScale()); err != nil {
-			return err
-		}
+		g.SetSize(w, h, u.actualScreenScale())
 		return nil
 	}
 	if err := g.Update(); err != nil {
@@ -184,12 +181,23 @@ func initialize() error {
 	// Keyboard
 	canvas.Call("addEventListener", "keydown", func(e *js.Object) {
 		e.Call("preventDefault")
-		code := e.Get("keyCode").Int()
+		if e.Get("code") == js.Undefined {
+			// Assume that UA is Safari.
+			code := e.Get("keyCode").Int()
+			currentInput.keyDownSafari(code)
+			return
+		}
+		code := e.Get("code").String()
 		currentInput.keyDown(code)
 	})
 	canvas.Call("addEventListener", "keyup", func(e *js.Object) {
 		e.Call("preventDefault")
-		code := e.Get("keyCode").Int()
+		if e.Get("code") == js.Undefined {
+			// Assume that UA is Safari.
+			code := e.Get("keyCode").Int()
+			currentInput.keyUpSafari(code)
+		}
+		code := e.Get("code").String()
 		currentInput.keyUp(code)
 	})
 
@@ -235,12 +243,11 @@ func initialize() error {
 
 	canvas.Call("addEventListener", "webglcontextlost", func(e *js.Object) {
 		e.Call("preventDefault")
-		currentUI.contextRestored = false
 	})
 	canvas.Call("addEventListener", "webglcontextrestored", func(e *js.Object) {
-		// TODO: Call preventDefault?
-		currentUI.contextRestored = true
+		// Do nothing.
 	})
+
 	return nil
 }
 
@@ -271,9 +278,7 @@ func Run(width, height int, scale float64, title string, g GraphicsContext) erro
 	doc.Set("title", title)
 	u.setScreenSize(width, height, scale)
 	canvas.Call("focus")
-	var err error
-	glContext, err = opengl.NewContext()
-	if err != nil {
+	if err := opengl.Init(); err != nil {
 		return err
 	}
 	return u.loop(g)
@@ -308,13 +313,12 @@ func (u *userInterface) setScreenSize(width, height int, scale float64) bool {
 		return false
 	}
 	u.scale = scale
-	// When the scale is an integer, let's rely on CSS crisp-edge/pixelated effect.
-	// Note that pixelated effect doesn't work for canvas on Safari.
-	if scale == float64(int64(scale)) && !isSafari() {
-		u.deviceScale = 1
-	} else {
-		u.deviceScale = devicePixelRatio()
-	}
+	// CSS imageRendering seems useful to enlarge the screen,
+	// but doesn't work in some cases (#306):
+	// * Chrome just after restoring the lost context
+	// * Safari
+	// Let's use the pixel ratio as it is here.
+	u.deviceScale = devicePixelRatio()
 	canvas.Set("width", int(float64(width)*u.actualScreenScale()))
 	canvas.Set("height", int(float64(height)*u.actualScreenScale()))
 	canvasStyle := canvas.Get("style")
@@ -326,9 +330,6 @@ func (u *userInterface) setScreenSize(width, height int, scale float64) bool {
 	// CSS calc requires space chars.
 	canvasStyle.Set("left", "calc((100% - "+strconv.Itoa(cssWidth)+"px) / 2)")
 	canvasStyle.Set("top", "calc((100% - "+strconv.Itoa(cssHeight)+"px) / 2)")
-	canvasStyle.Set("imageRendering", "-moz-crisp-edges")
-	canvasStyle.Set("imageRendering", "pixelated")
-	// TODO: Set `-ms-interpolation-mode: nearest-neighbor;` for IE.
 	u.sizeChanged = true
 	return true
 }

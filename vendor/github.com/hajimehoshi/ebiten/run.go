@@ -63,12 +63,15 @@ var theGraphicsContext atomic.Value
 // f is a function which is called at every frame.
 // The argument (*Image) is the render target that represents the screen.
 //
-// This function must be called from the main thread.
+// Run must be called from the main thread.
 // Note that ebiten bounds the main goroutine to the main OS thread by runtime.LockOSThread.
 //
 // The given function f is guaranteed to be called 60 times a second
 // even if a rendering frame is skipped.
 // f is not called when the screen is not shown.
+//
+// Run returns error when 1) OpenGL error happens, or 2) f returns error.
+// In the case of 2), Run returns the same error.
 //
 // The size unit is device-independent pixel.
 func Run(f func(*Image) error, width, height int, scale float64, title string) error {
@@ -118,9 +121,7 @@ func SetScreenSize(width, height int) {
 	if width <= 0 || height <= 0 {
 		panic("ebiten: width and height must be positive")
 	}
-	if _, err := ui.SetScreenSize(width, height); err != nil {
-		panic(err)
-	}
+	ui.SetScreenSize(width, height)
 }
 
 // SetScreenScale changes the scale of the screen.
@@ -130,9 +131,7 @@ func SetScreenScale(scale float64) {
 	if scale <= 0 {
 		panic("ebiten: scale must be positive")
 	}
-	if _, err := ui.SetScreenScale(scale); err != nil {
-		panic(err)
-	}
+	ui.SetScreenScale(scale)
 }
 
 // ScreenScale returns the current screen scale.

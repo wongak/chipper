@@ -14,58 +14,30 @@
 
 package affine
 
-type affine interface {
-	dim() int
-	Element(i, j int) float64
-	SetElement(i, j int, element float64)
-}
-
-func isIdentity(ebiten affine) bool {
-	dim := ebiten.dim()
+// add is deprecated
+func add(lhs, rhs []float64, dim int) []float64 {
+	result := make([]float64, len(lhs))
 	for i := 0; i < dim-1; i++ {
 		for j := 0; j < dim; j++ {
-			element := ebiten.Element(i, j)
-			if i == j && element != 1 {
-				return false
-			} else if i != j && element != 0 {
-				return false
-			}
+			result[i*dim+j] = lhs[i*dim+j] + rhs[i*dim+j]
 		}
 	}
-	return true
+	return result
 }
 
-func add(lhs, rhs, result affine) {
-	dim := lhs.dim()
-	if dim != rhs.dim() {
-		panic("ebiten: different-sized matrices can't be multiplied")
-	}
-
+func mul(lhs, rhs []float64, dim int) []float64 {
+	result := make([]float64, len(lhs))
 	for i := 0; i < dim-1; i++ {
 		for j := 0; j < dim; j++ {
-			v := lhs.Element(i, j) + rhs.Element(i, j)
-			result.SetElement(i, j, v)
-		}
-	}
-}
-
-func mul(lhs, rhs, result affine) {
-	dim := lhs.dim()
-	if dim != rhs.dim() {
-		panic("ebiten: different-sized matrices can't be multiplied")
-	}
-
-	for i := 0; i < dim-1; i++ {
-		for j := 0; j < dim; j++ {
-			element := float64(0)
+			e := 0.0
 			for k := 0; k < dim-1; k++ {
-				element += lhs.Element(i, k) *
-					rhs.Element(k, j)
+				e += lhs[i*dim+k] * rhs[k*dim+j]
 			}
 			if j == dim-1 {
-				element += lhs.Element(i, j)
+				e += lhs[i*dim+j]
 			}
-			result.SetElement(i, j, element)
+			result[i*dim+j] = e
 		}
 	}
+	return result
 }

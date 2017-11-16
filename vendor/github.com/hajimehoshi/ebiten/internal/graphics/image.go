@@ -43,7 +43,7 @@ func CopyImage(origImg image.Image) *image.RGBA {
 			palette[4*i+2] = rgba.B
 			palette[4*i+3] = rgba.A
 		}
-		index0 := y0*origImg.Stride + x0
+		index0 := 0
 		index1 := 0
 		d0 := origImg.Stride - (x1 - x0)
 		d1 := newImg.Stride - (x1-x0)*4
@@ -51,7 +51,7 @@ func CopyImage(origImg image.Image) *image.RGBA {
 		pix1 := newImg.Pix
 		for j := 0; j < y1-y0; j++ {
 			for i := 0; i < x1-x0; i++ {
-				p := pix0[index0]
+				p := int(pix0[index0])
 				pix1[index1] = palette[4*p]
 				pix1[index1+1] = palette[4*p+1]
 				pix1[index1+2] = palette[4*p+2]
@@ -76,9 +76,9 @@ type Image struct {
 	height      int
 }
 
-const ImageMaxSize = viewportSize
+const MaxImageSize = viewportSize
 
-func NewImage(width, height int, filter opengl.Filter) (*Image, error) {
+func NewImage(width, height int, filter opengl.Filter) *Image {
 	i := &Image{
 		width:  width,
 		height: height,
@@ -90,10 +90,10 @@ func NewImage(width, height int, filter opengl.Filter) (*Image, error) {
 		filter: filter,
 	}
 	theCommandQueue.Enqueue(c)
-	return i, nil
+	return i
 }
 
-func NewImageFromImage(img *image.RGBA, width, height int, filter opengl.Filter) (*Image, error) {
+func NewImageFromImage(img *image.RGBA, width, height int, filter opengl.Filter) *Image {
 	i := &Image{
 		width:  width,
 		height: height,
@@ -104,10 +104,10 @@ func NewImageFromImage(img *image.RGBA, width, height int, filter opengl.Filter)
 		filter: filter,
 	}
 	theCommandQueue.Enqueue(c)
-	return i, nil
+	return i
 }
 
-func NewScreenFramebufferImage(width, height int) (*Image, error) {
+func NewScreenFramebufferImage(width, height int) *Image {
 	i := &Image{
 		width:  width,
 		height: height,
@@ -118,56 +118,46 @@ func NewScreenFramebufferImage(width, height int) (*Image, error) {
 		height: height,
 	}
 	theCommandQueue.Enqueue(c)
-	return i, nil
+	return i
 }
 
-func (i *Image) Dispose() error {
+func (i *Image) Dispose() {
 	c := &disposeCommand{
 		target: i,
 	}
 	theCommandQueue.Enqueue(c)
-	return nil
 }
 
 func (i *Image) Size() (int, int) {
 	return i.width, i.height
 }
 
-func (i *Image) Fill(clr color.RGBA) error {
+func (i *Image) Fill(clr color.RGBA) {
 	// TODO: Need to clone clr value
 	c := &fillCommand{
 		dst:   i,
 		color: clr,
 	}
 	theCommandQueue.Enqueue(c)
-	return nil
 }
 
-func (i *Image) DrawImage(src *Image, vertices []float32, clr affine.ColorM, mode opengl.CompositeMode) error {
-	c := &drawImageCommand{
-		dst:      i,
-		src:      src,
-		vertices: vertices,
-		color:    clr,
-		mode:     mode,
-	}
-	theCommandQueue.Enqueue(c)
-	return nil
+func (i *Image) DrawImage(src *Image, vertices []float32, clr *affine.ColorM, mode opengl.CompositeMode) {
+	theCommandQueue.EnqueueDrawImageCommand(i, src, vertices, clr, mode)
 }
 
-func (i *Image) Pixels(context *opengl.Context) ([]uint8, error) {
+func (i *Image) Pixels() ([]uint8, error) {
 	// Flush the enqueued commands so that pixels are certainly read.
-	if err := theCommandQueue.Flush(context); err != nil {
+	if err := theCommandQueue.Flush(); err != nil {
 		return nil, err
 	}
-	f, err := i.createFramebufferIfNeeded(context)
+	f, err := i.createFramebufferIfNeeded()
 	if err != nil {
 		return nil, err
 	}
-	return context.FramebufferPixels(f.native, i.width, i.height)
+	return opengl.GetContext().FramebufferPixels(f.native, NextPowerOf2Int(i.width), NextPowerOf2Int(i.height))
 }
 
-func (i *Image) ReplacePixels(p []uint8) error {
+func (i *Image) ReplacePixels(p []uint8) {
 	pixels := make([]uint8, len(p))
 	copy(pixels, p)
 	c := &replacePixelsCommand{
@@ -175,18 +165,17 @@ func (i *Image) ReplacePixels(p []uint8) error {
 		pixels: pixels,
 	}
 	theCommandQueue.Enqueue(c)
-	return nil
 }
 
-func (i *Image) IsInvalidated(context *opengl.Context) bool {
-	return !context.IsTexture(i.texture.native)
+func (i *Image) IsInvalidated() bool {
+	return !opengl.GetContext().IsTexture(i.texture.native)
 }
 
-func (i *Image) createFramebufferIfNeeded(context *opengl.Context) (*framebuffer, error) {
+func (i *Image) createFramebufferIfNeeded() (*framebuffer, error) {
 	if i.framebuffer != nil {
 		return i.framebuffer, nil
 	}
-	f, err := newFramebufferFromTexture(context, i.texture)
+	f, err := newFramebufferFromTexture(i.texture)
 	if err != nil {
 		return nil, err
 	}

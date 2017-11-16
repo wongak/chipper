@@ -72,6 +72,7 @@ const (
 	OpenGLForwardCompatible Hint = C.GLFW_OPENGL_FORWARD_COMPAT    // Specifies whether the OpenGL context should be forward-compatible. Hard constraint.
 	OpenGLDebugContext      Hint = C.GLFW_OPENGL_DEBUG_CONTEXT     // Specifies whether to create a debug OpenGL context, which may have additional error and performance issue reporting functionality. If OpenGL ES is requested, this hint is ignored.
 	OpenGLProfile           Hint = C.GLFW_OPENGL_PROFILE           // Specifies which OpenGL profile to create the context for. Hard constraint.
+	ContextCreationAPI      Hint = C.GLFW_CONTEXT_CREATION_API     // Specifies which context creation API to use to create the context.
 )
 
 // Framebuffer related hints.
@@ -136,10 +137,11 @@ const (
 	DontCare int = C.GLFW_DONT_CARE
 )
 
+// Window represents a window.
 type Window struct {
 	data *C.GLFWwindow
 
-	// Window
+	// Window.
 	fPosHolder             func(w *Window, xpos int, ypos int)
 	fSizeHolder            func(w *Window, width int, height int)
 	fFramebufferSizeHolder func(w *Window, width int, height int)
@@ -148,7 +150,7 @@ type Window struct {
 	fFocusHolder           func(w *Window, focused bool)
 	fIconifyHolder         func(w *Window, iconified bool)
 
-	// Input
+	// Input.
 	fMouseButtonHolder func(w *Window, button MouseButton, action Action, mod ModifierKey)
 	fCursorPosHolder   func(w *Window, xpos float64, ypos float64)
 	fCursorEnterHolder func(w *Window, entered bool)
@@ -209,7 +211,7 @@ func goWindowIconifyCB(window unsafe.Pointer, iconified C.int) {
 	w.fIconifyHolder(w, isIconified)
 }
 
-// DefaultHints resets all window hints to their default values.
+// DefaultWindowHints resets all window hints to their default values.
 //
 // This function may only be called from the main thread.
 func DefaultWindowHints() {
@@ -217,9 +219,9 @@ func DefaultWindowHints() {
 	panicError()
 }
 
-// Hint function sets hints for the next call to CreateWindow. The hints,
-// once set, retain their values until changed by a call to Hint or
-// DefaultHints, or until the library is terminated with Terminate.
+// WindowHint sets hints for the next call to CreateWindow. The hints,
+// once set, retain their values until changed by a call to WindowHint or
+// DefaultWindowHints, or until the library is terminated with Terminate.
 //
 // This function may only be called from the main thread.
 func WindowHint(target Hint, hint int) {
@@ -295,7 +297,7 @@ func (w *Window) Destroy() {
 	panicError()
 }
 
-// ShouldClose returns the value of the close flag of the specified window.
+// ShouldClose reports the value of the close flag of the specified window.
 func (w *Window) ShouldClose() bool {
 	ret := glfwbool(C.glfwWindowShouldClose(w.data))
 	panicError()
@@ -328,6 +330,12 @@ func (w *Window) SetTitle(title string) {
 // those of or closest to the sizes desired by the system are selected. If no images are
 // specified, the window reverts to its default icon.
 //
+// The image is ideally provided in the form of *image.NRGBA.
+// The pixels are 32-bit, little-endian, non-premultiplied RGBA, i.e. eight
+// bits per channel with the red channel first. They are arranged canonically
+// as packed sequential rows, starting from the top-left corner. If the image
+// type is not *image.NRGBA, it will be converted to it.
+//
 // The desired image sizes varies depending on platform and system settings. The selected
 // images will be rescaled as needed. Good sizes include 16x16, 32x32 and 48x48.
 func (w *Window) SetIcon(images []image.Image) {
@@ -340,10 +348,10 @@ func (w *Window) SetIcon(images []image.Image) {
 		b := img.Bounds()
 
 		switch img := img.(type) {
-		case *image.RGBA:
+		case *image.NRGBA:
 			pixels = img.Pix
 		default:
-			m := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+			m := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
 			draw.Draw(m, m.Bounds(), img, b.Min, draw.Src)
 			pixels = m.Pix
 		}
@@ -356,7 +364,11 @@ func (w *Window) SetIcon(images []image.Image) {
 		cimages[i].pixels = (*C.uchar)(pix)
 	}
 
-	C.glfwSetWindowIcon(w.data, C.int(count), &cimages[0])
+	var p *C.GLFWimage
+	if count > 0 {
+		p = &cimages[0]
+	}
+	C.glfwSetWindowIcon(w.data, C.int(count), p)
 
 	for _, v := range freePixels {
 		v()
@@ -475,7 +487,7 @@ func (w *Window) Focus() error {
 	return acceptError(APIUnavailable)
 }
 
-// Iconfiy iconifies/minimizes the window, if it was previously restored. If it
+// Iconify iconifies/minimizes the window, if it was previously restored. If it
 // is a full screen window, the original monitor resolution is restored until the
 // window is restored. If the window is already iconified, this function does
 // nothing.
@@ -586,6 +598,7 @@ func (w *Window) GetUserPointer() unsafe.Pointer {
 	return ret
 }
 
+// PosCallback is the window position callback.
 type PosCallback func(w *Window, xpos int, ypos int)
 
 // SetPosCallback sets the position callback of the window, which is called
@@ -603,6 +616,7 @@ func (w *Window) SetPosCallback(cbfun PosCallback) (previous PosCallback) {
 	return previous
 }
 
+// SizeCallback is the window size callback.
 type SizeCallback func(w *Window, width int, height int)
 
 // SetSizeCallback sets the size callback of the window, which is called when
@@ -620,6 +634,7 @@ func (w *Window) SetSizeCallback(cbfun SizeCallback) (previous SizeCallback) {
 	return previous
 }
 
+// FramebufferSizeCallback is the framebuffer size callback.
 type FramebufferSizeCallback func(w *Window, width int, height int)
 
 // SetFramebufferSizeCallback sets the framebuffer resize callback of the specified
@@ -636,6 +651,7 @@ func (w *Window) SetFramebufferSizeCallback(cbfun FramebufferSizeCallback) (prev
 	return previous
 }
 
+// CloseCallback is the window close callback.
 type CloseCallback func(w *Window)
 
 // SetCloseCallback sets the close callback of the window, which is called when
@@ -659,6 +675,7 @@ func (w *Window) SetCloseCallback(cbfun CloseCallback) (previous CloseCallback) 
 	return previous
 }
 
+// RefreshCallback is the window refresh callback.
 type RefreshCallback func(w *Window)
 
 // SetRefreshCallback sets the refresh callback of the window, which
@@ -680,6 +697,7 @@ func (w *Window) SetRefreshCallback(cbfun RefreshCallback) (previous RefreshCall
 	return previous
 }
 
+// FocusCallback is the window focus callback.
 type FocusCallback func(w *Window, focused bool)
 
 // SetFocusCallback sets the focus callback of the window, which is called when
@@ -700,6 +718,7 @@ func (w *Window) SetFocusCallback(cbfun FocusCallback) (previous FocusCallback) 
 	return previous
 }
 
+// IconifyCallback is the window iconification callback.
 type IconifyCallback func(w *Window, iconified bool)
 
 // SetIconifyCallback sets the iconification callback of the window, which is
@@ -790,7 +809,7 @@ func WaitEvents() {
 // processing functions.
 //
 // If no windows exist, this function returns immediately. For synchronization of threads in
-// applications that do not create windows, use your threading library of choice.
+// applications that do not create windows, use native Go primitives.
 //
 // Event processing is not required for joystick input to work.
 func WaitEventsTimeout(timeout float64) {
@@ -801,9 +820,8 @@ func WaitEventsTimeout(timeout float64) {
 // PostEmptyEvent posts an empty event from the current thread to the main
 // thread event queue, causing WaitEvents to return.
 //
-// If no windows exist, this function returns immediately.  For
-// synchronization of threads in applications that do not create windows, use
-// your threading library of choice.
+// If no windows exist, this function returns immediately. For synchronization of threads in
+// applications that do not create windows, use native Go primitives.
 //
 // This function may be called from secondary threads.
 func PostEmptyEvent() {

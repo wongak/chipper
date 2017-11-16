@@ -16,11 +16,9 @@ package ebiten
 
 import (
 	"math"
-	"sync/atomic"
 
 	"github.com/hajimehoshi/ebiten/internal/graphics"
-	"github.com/hajimehoshi/ebiten/internal/opengl"
-	"github.com/hajimehoshi/ebiten/internal/ui"
+	"github.com/hajimehoshi/ebiten/internal/restorable"
 )
 
 func newGraphicsContext(f func(*Image) error) *graphicsContext {
@@ -35,148 +33,115 @@ type graphicsContext struct {
 	offscreen2  *Image // TODO: better name
 	screen      *Image
 	screenScale float64
-	initialized int32
+	initialized bool
+	invalidated bool // browser only
 }
 
-func (c *graphicsContext) GLContext() *opengl.Context {
-	if atomic.LoadInt32(&c.initialized) == 0 {
-		return nil
-	}
-	return ui.GLContext()
+func (c *graphicsContext) Invalidate() {
+	// Note that this is called only on browsers so far.
+	// TODO: On mobiles, this function is not called and instead IsTexture is called
+	// to detect if the context is lost. This is simple but might not work on some platforms.
+	// Should Invalidate be called explicitly?
+	c.invalidated = true
 }
 
-func (c *graphicsContext) SetSize(screenWidth, screenHeight int, screenScale float64) error {
+func (c *graphicsContext) SetSize(screenWidth, screenHeight int, screenScale float64) {
 	if c.screen != nil {
-		if err := c.screen.Dispose(); err != nil {
-			return err
-		}
+		_ = c.screen.Dispose()
 	}
 	if c.offscreen != nil {
-		if err := c.offscreen.Dispose(); err != nil {
-			return err
-		}
+		_ = c.offscreen.Dispose()
 	}
 	if c.offscreen2 != nil {
-		if err := c.offscreen2.Dispose(); err != nil {
-			return err
-		}
+		_ = c.offscreen2.Dispose()
 	}
-	offscreen, err := newVolatileImage(screenWidth, screenHeight, FilterNearest)
-	if err != nil {
-		return err
-	}
+	offscreen := newVolatileImage(screenWidth, screenHeight, FilterNearest)
 
 	intScreenScale := int(math.Ceil(screenScale))
 	w := screenWidth * intScreenScale
 	h := screenHeight * intScreenScale
-	offscreen2, err := newVolatileImage(w, h, FilterLinear)
-	if err != nil {
-		return err
-	}
+	offscreen2 := newVolatileImage(w, h, FilterLinear)
 
 	w = int(float64(screenWidth) * screenScale)
 	h = int(float64(screenHeight) * screenScale)
-	c.screen, err = newImageWithScreenFramebuffer(w, h)
-	if err != nil {
-		return err
-	}
-	if err := c.screen.Clear(); err != nil {
-		return err
-	}
+	c.screen = newImageWithScreenFramebuffer(w, h)
+	_ = c.screen.Clear()
 
 	c.offscreen = offscreen
 	c.offscreen2 = offscreen2
 	c.screenScale = screenScale
-	return nil
 }
 
-func (c *graphicsContext) needsRestoring(context *opengl.Context) (bool, error) {
-	// FlushCommands is required because c.offscreen.impl might not have an actual texture.
-	if err := graphics.FlushCommands(context); err != nil {
-		return false, err
-	}
-	return c.offscreen.impl.isInvalidated(context), nil
-}
-
-func (c *graphicsContext) initializeIfNeeded(context *opengl.Context) error {
-	if atomic.LoadInt32(&c.initialized) == 0 {
-		if err := graphics.Reset(context); err != nil {
+func (c *graphicsContext) initializeIfNeeded() error {
+	if !c.initialized {
+		if err := graphics.Reset(); err != nil {
 			return err
 		}
-		atomic.StoreInt32(&c.initialized, 1)
+		c.initialized = true
 	}
-	r, err := c.needsRestoring(context)
+	r, err := c.needsRestoring()
 	if err != nil {
 		return err
 	}
 	if !r {
 		return nil
 	}
-	if err := c.restore(context); err != nil {
+	if err := c.restore(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func drawWithFittingScale(dst *Image, src *Image) error {
+func drawWithFittingScale(dst *Image, src *Image) {
 	wd, hd := dst.Size()
 	ws, hs := src.Size()
 	sw := float64(wd) / float64(ws)
 	sh := float64(hd) / float64(hs)
 	op := &DrawImageOptions{}
 	op.GeoM.Scale(sw, sh)
-	if err := dst.DrawImage(src, op); err != nil {
+	_ = dst.DrawImage(src, op)
+}
+
+func (c *graphicsContext) drawToDefaultRenderTarget() error {
+	_ = c.screen.Clear()
+	drawWithFittingScale(c.screen, c.offscreen2)
+	if err := graphics.FlushCommands(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *graphicsContext) drawToDefaultRenderTarget(context *opengl.Context) error {
-	if err := c.screen.Clear(); err != nil {
-		return err
-	}
-	if err := drawWithFittingScale(c.screen, c.offscreen2); err != nil {
-		return err
-	}
-	if err := graphics.FlushCommands(context); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (c *graphicsContext) UpdateAndDraw(context *opengl.Context, updateCount int) error {
-	if err := c.initializeIfNeeded(context); err != nil {
-		return err
-	}
-	if err := theImagesForRestoring.resolveStalePixels(context); err != nil {
+func (c *graphicsContext) UpdateAndDraw(updateCount int) error {
+	if err := c.initializeIfNeeded(); err != nil {
 		return err
 	}
 	for i := 0; i < updateCount; i++ {
-		if err := theImagesForRestoring.clearVolatileImages(); err != nil {
-			return err
-		}
+		restorable.ClearVolatileImages()
 		setRunningSlowly(i < updateCount-1)
 		if err := c.f(c.offscreen); err != nil {
 			return err
 		}
 	}
 	if 0 < updateCount {
-		if err := drawWithFittingScale(c.offscreen2, c.offscreen); err != nil {
-			return err
-		}
+		drawWithFittingScale(c.offscreen2, c.offscreen)
 	}
-	if err := c.drawToDefaultRenderTarget(context); err != nil {
+	if err := c.drawToDefaultRenderTarget(); err != nil {
+		return err
+	}
+	// TODO: Add tests to check if this behavior is correct (#357)
+	if err := restorable.ResolveStalePixels(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *graphicsContext) restore(context *opengl.Context) error {
-	if err := graphics.Reset(context); err != nil {
+func (c *graphicsContext) restore() error {
+	if err := graphics.Reset(); err != nil {
 		return err
 	}
-	if err := theImagesForRestoring.restore(context); err != nil {
+	if err := restorable.Restore(); err != nil {
 		return err
 	}
+	c.invalidated = false
 	return nil
 }

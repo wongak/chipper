@@ -20,63 +20,113 @@ import (
 	"github.com/gopherjs/gopherjs/js"
 )
 
-func (i *input) keyDown(key int) {
-	i.m.Lock()
-	defer i.m.Unlock()
-	k, ok := keyCodeToKey[key]
-	if !ok {
-		return
-	}
-	i.keyPressed[k] = true
+type mockRWLock struct{}
+
+func (m mockRWLock) Lock()    {}
+func (m mockRWLock) Unlock()  {}
+func (m mockRWLock) RLock()   {}
+func (m mockRWLock) RUnlock() {}
+
+type Input struct {
+	keyPressed         map[string]bool
+	keyPressedSafari   map[int]bool
+	mouseButtonPressed map[int]bool
+	cursorX            int
+	cursorY            int
+	gamepads           [16]gamePad
+	touches            []touch
+	m                  mockRWLock
 }
 
-func (i *input) keyUp(key int) {
-	i.m.Lock()
-	defer i.m.Unlock()
-	k, ok := keyCodeToKey[key]
-	if !ok {
-		return
+func (i *Input) IsKeyPressed(key Key) bool {
+	if i.keyPressed != nil {
+		for _, c := range keyToCodes[key] {
+			if i.keyPressed[c] {
+				return true
+			}
+		}
 	}
-	i.keyPressed[k] = false
+	if i.keyPressedSafari != nil {
+		for c, k := range keyCodeToKeySafari {
+			if k != key {
+				continue
+			}
+			if i.keyPressedSafari[c] {
+				return true
+			}
+		}
+	}
+	return false
 }
 
-func (i *input) mouseDown(button int) {
-	i.m.Lock()
-	defer i.m.Unlock()
-	p := &i.mouseButtonPressed
-	switch button {
-	case 0:
-		p[MouseButtonLeft] = true
-	case 1:
-		p[MouseButtonMiddle] = true
-	case 2:
-		p[MouseButtonRight] = true
-	}
+var codeToMouseButton = map[int]MouseButton{
+	0: MouseButtonLeft,
+	1: MouseButtonMiddle,
+	2: MouseButtonRight,
 }
 
-func (i *input) mouseUp(button int) {
-	i.m.Lock()
-	defer i.m.Unlock()
-	p := &i.mouseButtonPressed
-	switch button {
-	case 0:
-		p[MouseButtonLeft] = false
-	case 1:
-		p[MouseButtonMiddle] = false
-	case 2:
-		p[MouseButtonRight] = false
+func (i *Input) IsMouseButtonPressed(button MouseButton) bool {
+	if i.mouseButtonPressed == nil {
+		i.mouseButtonPressed = map[int]bool{}
 	}
+	for c, b := range codeToMouseButton {
+		if b != button {
+			continue
+		}
+		if i.mouseButtonPressed[c] {
+			return true
+		}
+	}
+	return false
 }
 
-func (i *input) setMouseCursor(x, y int) {
-	i.m.Lock()
-	defer i.m.Unlock()
+func (i *Input) keyDown(code string) {
+	if i.keyPressed == nil {
+		i.keyPressed = map[string]bool{}
+	}
+	i.keyPressed[code] = true
+}
+
+func (i *Input) keyUp(code string) {
+	if i.keyPressed == nil {
+		i.keyPressed = map[string]bool{}
+	}
+	i.keyPressed[code] = false
+}
+
+func (i *Input) keyDownSafari(code int) {
+	if i.keyPressedSafari == nil {
+		i.keyPressedSafari = map[int]bool{}
+	}
+	i.keyPressedSafari[code] = true
+}
+
+func (i *Input) keyUpSafari(code int) {
+	if i.keyPressedSafari == nil {
+		i.keyPressedSafari = map[int]bool{}
+	}
+	i.keyPressedSafari[code] = false
+}
+
+func (i *Input) mouseDown(code int) {
+	if i.mouseButtonPressed == nil {
+		i.mouseButtonPressed = map[int]bool{}
+	}
+	i.mouseButtonPressed[code] = true
+}
+
+func (i *Input) mouseUp(code int) {
+	if i.mouseButtonPressed == nil {
+		i.mouseButtonPressed = map[int]bool{}
+	}
+	i.mouseButtonPressed[code] = false
+}
+
+func (i *Input) setMouseCursor(x, y int) {
 	i.cursorX, i.cursorY = x, y
 }
 
-func (i *input) updateGamepads() {
-	i.m.Lock()
-	defer i.m.Unlock()
+func (i *Input) updateGamepads() {
 	nav := js.Global.Get("navigator")
 	if nav.Get("getGamepads") == js.Undefined {
 		return
@@ -113,9 +163,7 @@ func (i *input) updateGamepads() {
 	}
 }
 
-func (i *input) updateTouches(t []touch) {
-	i.m.Lock()
-	defer i.m.Unlock()
+func (i *Input) updateTouches(t []touch) {
 	i.touches = make([]touch, len(t))
 	copy(i.touches, t)
 }

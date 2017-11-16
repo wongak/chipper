@@ -70,6 +70,9 @@ func update(screen *ebiten.Image) error {
 	if ebiten.IsKeyPressed(ebiten.KeyX) {
 		valueInt++
 	}
+	if ebiten.IsRunningSlowly() {
+		return nil
+	}
 	hueInt = clamp(hueInt, -256, 256)
 	saturationInt = clamp(saturationInt, 0, 256)
 	valueInt = clamp(valueInt, 0, 256)
@@ -81,16 +84,12 @@ func update(screen *ebiten.Image) error {
 	saturation := float64(saturationInt) / 128
 	value := float64(valueInt) / 128
 	op.ColorM.ChangeHSV(hue, saturation, value)
-	if err := screen.DrawImage(gophersImage, op); err != nil {
-		return err
-	}
+	screen.DrawImage(gophersImage, op)
 
 	msg := fmt.Sprintf(`Hue:        %0.2f [Q][W]
 Saturation: %0.2f [A][S]
 Value:      %0.2f [Z][X]`, hue, saturation, value)
-	if err := ebitenutil.DebugPrint(screen, msg); err != nil {
-		return err
-	}
+	ebitenutil.DebugPrint(screen, msg)
 	return nil
 }
 

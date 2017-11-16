@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build darwin,!arm,!arm64 linux windows
+// +build darwin freebsd linux windows
 // +build !android
 // +build !ios
 
@@ -26,6 +26,5 @@ func update() error {
 	return nil
 }
 
-func start(f func(*ebiten.Image) error, width, height int, scale float64, title string) error {
-	return nil
+func start(f func(*ebiten.Image) error, width, height int, scale float64, title string) {
 }

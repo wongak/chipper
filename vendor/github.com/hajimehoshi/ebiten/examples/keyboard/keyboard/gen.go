@@ -30,17 +30,17 @@ import (
 )
 
 var keyboardKeys = [][]string{
-	{"Esc", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", " ", " ", " ", "Del"},
-	{"Tab", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", " ", " ", "BS"},
-	{"Ctrl", "A", "S", "D", "F", "G", "H", "J", "K", "L", " ", " ", "Enter"},
-	{"Shift", "Z", "X", "C", "V", "B", "N", "M", ",", ".", " ", " "},
+	{"Esc", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "\\", "`", " "},
+	{"Tab", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "[", "]", "BS"},
+	{"Ctrl", "A", "S", "D", "F", "G", "H", "J", "K", "L", ";", "'", "Enter"},
+	{"Shift", "Z", "X", "C", "V", "B", "N", "M", ",", ".", "/", " "},
 	{" ", "Alt", "Space", " ", " "},
 	{},
 	{"", "Up", ""},
 	{"Left", "Down", "Right"},
 }
 
-func drawKey(t *image.NRGBA, name string, x, y, width int) error {
+func drawKey(t *image.NRGBA, name string, x, y, width int) {
 	const height = 16
 	width--
 	shape := image.NewNRGBA(image.Rect(0, 0, width, height))
@@ -81,10 +81,7 @@ func drawKey(t *image.NRGBA, name string, x, y, width int) error {
 		}
 	}
 	draw.Draw(t, image.Rect(x, y, x+width, y+height), shape, image.ZP, draw.Over)
-	if err := common.ArcadeFont.DrawTextOnImage(t, name, x+4, y+5); err != nil {
-		return err
-	}
-	return nil
+	common.ArcadeFont.DrawTextOnImage(t, name, x+4, y+5)
 }
 
 func outputKeyboardImage() (map[string]image.Rectangle, error) {
@@ -102,7 +99,9 @@ func outputKeyboardImage() (map[string]image.Rectangle, error) {
 				case 0:
 					width = 16 + 8*(j+2)
 				case len(line) - 1:
-					width = 16 + 8*(j+2)
+					if j > 0 {
+						width = 16 + 8*(j+2)
+					}
 				}
 			case 4:
 				switch i {
@@ -121,9 +120,7 @@ func outputKeyboardImage() (map[string]image.Rectangle, error) {
 				width = 16 * 3
 			}
 			if key != "" {
-				if err := drawKey(img, key, x, y, width); err != nil {
-					return nil, err
-				}
+				drawKey(img, key, x, y, width)
 				if key != " " {
 					keyMap[key] = image.Rect(x, y, x+width, y+height)
 				}
@@ -165,7 +162,7 @@ import (
 var keyboardKeyRects = map[string]image.Rectangle{}
 
 func init() {
-{{range $key, $rect := .KeyRectsMap}}	keyboardKeyRects["{{$key}}"] = image.Rect({{$rect.Min.X}}, {{$rect.Min.Y}}, {{$rect.Max.X}}, {{$rect.Max.Y}})
+{{range $key, $rect := .KeyRectsMap}}	keyboardKeyRects[{{printf "%q" $key}}] = image.Rect({{$rect.Min.X}}, {{$rect.Min.Y}}, {{$rect.Max.X}}, {{$rect.Max.Y}})
 {{end}}}
 
 func KeyRect(name string) (image.Rectangle, bool) {

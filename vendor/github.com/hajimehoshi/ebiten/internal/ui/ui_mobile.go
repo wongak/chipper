@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build android ios darwin,arm darwin,arm64
+// +build android ios
 
 package ui
 
@@ -38,7 +38,7 @@ func Render(chError <-chan error) error {
 	// TODO: Check this is called on the rendering thread
 	select {
 	case chRender <- struct{}{}:
-		return glContext.DoWork(chError, chRenderEnd)
+		return opengl.GetContext().DoWork(chError, chRenderEnd)
 	case <-time.After(500 * time.Millisecond):
 		// This function must not be blocked. We need to break for timeout.
 		return nil
@@ -66,11 +66,7 @@ func Run(width, height int, scale float64, title string, g GraphicsContext) erro
 	u.height = height
 	u.scale = scale
 	// title is ignored?
-	var err error
-	glContext, err = opengl.NewContext()
-	if err != nil {
-		return err
-	}
+	opengl.Init()
 	for {
 		if err := u.update(g); err != nil {
 			return err
@@ -87,9 +83,7 @@ func (u *userInterface) update(g GraphicsContext) error {
 	if u.sizeChanged {
 		// Sizing also calls GL functions
 		u.sizeChanged = false
-		if err := g.SetSize(u.width, u.height, u.actualScreenScale()); err != nil {
-			return err
-		}
+		g.SetSize(u.width, u.height, u.actualScreenScale())
 		return nil
 	}
 	if err := g.Update(); err != nil {
@@ -98,14 +92,14 @@ func (u *userInterface) update(g GraphicsContext) error {
 	return nil
 }
 
-func SetScreenSize(width, height int) (bool, error) {
+func SetScreenSize(width, height int) bool {
 	// TODO: Implement
-	return false, nil
+	return false
 }
 
-func SetScreenScale(scale float64) (bool, error) {
+func SetScreenScale(scale float64) bool {
 	// TODO: Implement
-	return false, nil
+	return false
 }
 
 func ScreenScale() float64 {

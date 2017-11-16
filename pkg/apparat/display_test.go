@@ -104,15 +104,50 @@ func TestDrawOp(t *testing.T) {
 	// ****
 	copy(s.Mem[0x208:], []byte{
 		0xA0, 0x78, // load I 0x78 = 8
+		0x60, 0x38, // load V0 56 = 0x38
+		0x61, 0x1B, // load V1 27 = 0x1B
 		0xD0, 0x15, // draw V0, V1, 5
 	})
-	s.executeOpcode()
-	s.executeOpcode()
-	if s.V[0xF] != 1 {
-		t.Error("expect flipped to be 1")
+	for i := 0; i < 4; i++ {
+		s.executeOpcode()
 	}
-	if s.Dsp.Line(15) != 0x600000000 {
-		t.Errorf("expect line 3 to be drawn, got %X", s.Dsp.Line(15))
+	//if s.V[0xF] != 1 {
+	//	t.Error("expect flipped to be 1")
+	//}
+	//if s.Dsp.Line(15) != 0x600000000 {
+	//	t.Errorf("expect line 3 to be drawn, got %X", s.Dsp.Line(15))
+	//	t.Log("Dsp:\n" + s.Dsp.Dump() + "\n")
+	//}
+	if s.Dsp.Line(27) != 0x0000000F0 {
+		t.Errorf("expect line 26 to be drawn, got %X", s.Dsp.Line(26))
 		t.Log("Dsp:\n" + s.Dsp.Dump() + "\n")
 	}
+	l := s.Dsp.Line(31)
+	mask := uint64(1) << (63 - 59)
+	if mask&l == 0 {
+		t.Errorf("expect mask 1\n%064b\n%064b", mask, l)
+		t.Log("Dsp:\n" + s.Dsp.Dump() + "\n")
+	}
+	mask = uint64(1) << (63 - 60)
+	if mask&l != 0 {
+		t.Errorf("expect mask 0\n%064b\n%064b", mask, l)
+		t.Log("Dsp:\n" + s.Dsp.Dump() + "\n")
+	}
+
+	s.Dsp = NewDisplay()
+	// ****
+	// *  *
+	// ****
+	// *  *
+	// ****
+	copy(s.Mem[0x210:], []byte{
+		0xA0, 0x78, // load I 0x78 = 8
+		0x60, 0x3B, // load V0 59 = 0x3B
+		0x61, 0x1B, // load V1 27 = 0x1B
+		0xD0, 0x15, // draw V0, V1, 5
+	})
+	for i := 0; i < 4; i++ {
+		s.executeOpcode()
+	}
+	t.Log("Dsp:\n" + s.Dsp.Dump() + "\n")
 }

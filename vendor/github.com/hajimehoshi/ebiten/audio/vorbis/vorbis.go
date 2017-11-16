@@ -21,18 +21,14 @@ import (
 	"runtime"
 
 	"github.com/hajimehoshi/ebiten/audio"
-	"github.com/hajimehoshi/ebiten/audio/internal/resampling"
+	"github.com/hajimehoshi/ebiten/audio/internal/convert"
 	"github.com/jfreymuth/oggvorbis"
 )
 
-type readSeekCloseSizer interface {
-	audio.ReadSeekCloser
-	Size() int64
-}
-
 // Stream is a decoded audio stream.
 type Stream struct {
-	decoded readSeekCloseSizer
+	decoded audio.ReadSeekCloser
+	size    int64
 }
 
 // Read is implementation of io.Reader's Read.
@@ -54,7 +50,7 @@ func (s *Stream) Close() error {
 
 // Size returns the size of decoded stream in bytes.
 func (s *Stream) Size() int64 {
-	return s.decoded.Size()
+	return s.size
 }
 
 type decoded struct {
@@ -67,7 +63,6 @@ type decoded struct {
 }
 
 func (d *decoded) readUntil(posInBytes int) error {
-	c := 0
 	buffer := make([]float32, 8192)
 	for d.readBytes < posInBytes {
 		n, err := d.decoder.Read(buffer)
@@ -91,10 +86,7 @@ func (d *decoded) readUntil(posInBytes int) error {
 		if err != nil {
 			return err
 		}
-		c++
-		if c%2 == 0 {
-			runtime.Gosched()
-		}
+		runtime.Gosched()
 	}
 	return nil
 }
@@ -178,19 +170,27 @@ func decode(in audio.ReadSeekCloser) (*decoded, int, int, error) {
 
 // Decode decodes Ogg/Vorbis data to playable stream.
 //
+// Decode returns error when the source format is wrong.
+//
 // Sample rate is automatically adjusted to fit with the audio context.
 func Decode(context *audio.Context, src audio.ReadSeekCloser) (*Stream, error) {
 	decoded, channelNum, sampleRate, err := decode(src)
 	if err != nil {
 		return nil, err
 	}
-	// TODO: Remove this magic number
-	if channelNum != 2 {
-		return nil, fmt.Errorf("vorbis: number of channels must be 2")
+	if channelNum != 1 && channelNum != 2 {
+		return nil, fmt.Errorf("vorbis: number of channels must be 1 or 2 but was %d", channelNum)
+	}
+	var s audio.ReadSeekCloser = decoded
+	size := decoded.Size()
+	if channelNum == 1 {
+		s = convert.NewStereo16(s, true, false)
+		size *= 2
 	}
 	if sampleRate != context.SampleRate() {
-		s := resampling.NewStream(decoded, decoded.Size(), sampleRate, context.SampleRate())
-		return &Stream{s}, nil
+		r := convert.NewResampling(s, size, sampleRate, context.SampleRate())
+		s = r
+		size = r.Size()
 	}
-	return &Stream{decoded}, nil
+	return &Stream{decoded: s, size: size}, nil
 }

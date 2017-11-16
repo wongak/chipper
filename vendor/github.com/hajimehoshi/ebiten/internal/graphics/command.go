@@ -20,39 +20,66 @@ import (
 	"image"
 	"image/color"
 	"math"
-	"sync"
 
 	"github.com/hajimehoshi/ebiten/internal/affine"
 	"github.com/hajimehoshi/ebiten/internal/opengl"
+	"github.com/hajimehoshi/ebiten/internal/sync"
 )
 
 type command interface {
-	Exec(context *opengl.Context, indexOffsetInBytes int) error
+	Exec(indexOffsetInBytes int) error
 }
 
 type commandQueue struct {
-	commands []command
-	m        sync.Mutex
+	commands    []command
+	vertices    []float32
+	verticesNum int
+	m           sync.Mutex
 }
 
-var theCommandQueue = &commandQueue{
-	commands: []command{},
+var theCommandQueue = &commandQueue{}
+
+func (q *commandQueue) appendVertices(vertices []float32) {
+	if len(q.vertices) < q.verticesNum+len(vertices) {
+		n := q.verticesNum + len(vertices) - len(q.vertices)
+		q.vertices = append(q.vertices, make([]float32, n)...)
+	}
+	// for-loop might be faster than copy:
+	// On GopherJS, copy might cause subarray calls.
+	for i := 0; i < len(vertices); i++ {
+		q.vertices[q.verticesNum+i] = vertices[i]
+	}
+	q.verticesNum += len(vertices)
+}
+
+func (q *commandQueue) EnqueueDrawImageCommand(dst, src *Image, vertices []float32, clr *affine.ColorM, mode opengl.CompositeMode) {
+	// Avoid defer for performance
+	q.m.Lock()
+	q.appendVertices(vertices)
+	if 0 < len(q.commands) {
+		if c, ok := q.commands[len(q.commands)-1].(*drawImageCommand); ok {
+			if c.isMergeable(dst, src, clr, mode) {
+				c.verticesNum += len(vertices)
+				q.m.Unlock()
+				return
+			}
+		}
+	}
+	c := &drawImageCommand{
+		dst:         dst,
+		src:         src,
+		verticesNum: len(vertices),
+		color:       *clr,
+		mode:        mode,
+	}
+	q.commands = append(q.commands, c)
+	q.m.Unlock()
 }
 
 func (q *commandQueue) Enqueue(command command) {
 	q.m.Lock()
-	defer q.m.Unlock()
-	if 0 < len(q.commands) {
-		if c1, ok := q.commands[len(q.commands)-1].(*drawImageCommand); ok {
-			if c2, ok := command.(*drawImageCommand); ok {
-				if c1.isMergeable(c2) {
-					c1.vertices = append(c1.vertices, c2.vertices...)
-					return
-				}
-			}
-		}
-	}
 	q.commands = append(q.commands, command)
+	q.m.Unlock()
 }
 
 // commandGroups separates q.commands into some groups.
@@ -60,7 +87,7 @@ func (q *commandQueue) Enqueue(command command) {
 // its limit (maxQuads).
 func (q *commandQueue) commandGroups() [][]command {
 	cs := q.commands
-	gs := [][]command{}
+	var gs [][]command
 	quads := 0
 	for 0 < len(cs) {
 		if len(gs) == 0 {
@@ -86,56 +113,52 @@ func (q *commandQueue) commandGroups() [][]command {
 	return gs
 }
 
-func (q *commandQueue) Flush(context *opengl.Context) error {
+func (q *commandQueue) Flush() error {
 	q.m.Lock()
 	defer q.m.Unlock()
 	// glViewport must be called at least at every frame on iOS.
-	context.ResetViewportSize()
+	opengl.GetContext().ResetViewportSize()
+	n := 0
+	lastN := 0
 	for _, g := range q.commandGroups() {
-		n := 0
 		for _, c := range g {
 			switch c := c.(type) {
 			case *drawImageCommand:
-				n += len(c.vertices)
+				n += c.verticesNum
 			}
 		}
-		vertices := make([]float32, 0, n)
-		for _, c := range g {
-			switch c := c.(type) {
-			case *drawImageCommand:
-				vertices = append(vertices, c.vertices...)
-			}
-		}
-		if 0 < len(vertices) {
-			context.BufferSubData(opengl.ArrayBuffer, vertices)
+		if 0 < n-lastN {
+			opengl.GetContext().BufferSubData(opengl.ArrayBuffer, q.vertices[lastN:n])
 		}
 		// NOTE: WebGL doesn't seem to have Check gl.MAX_ELEMENTS_VERTICES or gl.MAX_ELEMENTS_INDICES so far.
 		// Let's use them to compare to len(quads) in the future.
-		if maxQuads < len(vertices)*opengl.Float.SizeInBytes()/QuadVertexSizeInBytes() {
+		if maxQuads < (n-lastN)*opengl.Float.SizeInBytes()/QuadVertexSizeInBytes() {
 			return fmt.Errorf("len(quads) must be equal to or less than %d", maxQuads)
 		}
 		numc := len(g)
 		indexOffsetInBytes := 0
 		for _, c := range g {
-			if err := c.Exec(context, indexOffsetInBytes); err != nil {
+			if err := c.Exec(indexOffsetInBytes); err != nil {
 				return err
 			}
 			if c, ok := c.(*drawImageCommand); ok {
-				n := len(c.vertices) * opengl.Float.SizeInBytes() / QuadVertexSizeInBytes()
+				n := c.verticesNum * opengl.Float.SizeInBytes() / QuadVertexSizeInBytes()
 				indexOffsetInBytes += 6 * n * 2
 			}
 		}
 		if 0 < numc {
 			// Call glFlush to prevent black flicking (especially on Android (#226) and iOS).
-			context.Flush()
+			opengl.GetContext().Flush()
 		}
+		lastN = n
 	}
-	q.commands = []command{}
+	q.commands = nil
+	q.verticesNum = 0
 	return nil
 }
 
-func FlushCommands(context *opengl.Context) error {
-	return theCommandQueue.Flush(context)
+func FlushCommands() error {
+	return theCommandQueue.Flush()
 }
 
 type fillCommand struct {
@@ -143,12 +166,12 @@ type fillCommand struct {
 	color color.RGBA
 }
 
-func (c *fillCommand) Exec(context *opengl.Context, indexOffsetInBytes int) error {
-	f, err := c.dst.createFramebufferIfNeeded(context)
+func (c *fillCommand) Exec(indexOffsetInBytes int) error {
+	f, err := c.dst.createFramebufferIfNeeded()
 	if err != nil {
 		return err
 	}
-	if err := f.setAsViewport(context); err != nil {
+	if err := f.setAsViewport(); err != nil {
 		return err
 	}
 	cr, cg, cb, ca := c.color.R, c.color.G, c.color.B, c.color.A
@@ -157,30 +180,30 @@ func (c *fillCommand) Exec(context *opengl.Context, indexOffsetInBytes int) erro
 	g := float64(cg) / max
 	b := float64(cb) / max
 	a := float64(ca) / max
-	return context.FillFramebuffer(r, g, b, a)
+	return opengl.GetContext().FillFramebuffer(r, g, b, a)
 }
 
 type drawImageCommand struct {
-	dst      *Image
-	src      *Image
-	vertices []float32
-	color    affine.ColorM
-	mode     opengl.CompositeMode
+	dst         *Image
+	src         *Image
+	verticesNum int
+	color       affine.ColorM
+	mode        opengl.CompositeMode
 }
 
 func QuadVertexSizeInBytes() int {
 	return 4 * theArrayBufferLayout.totalBytes()
 }
 
-func (c *drawImageCommand) Exec(context *opengl.Context, indexOffsetInBytes int) error {
-	f, err := c.dst.createFramebufferIfNeeded(context)
+func (c *drawImageCommand) Exec(indexOffsetInBytes int) error {
+	f, err := c.dst.createFramebufferIfNeeded()
 	if err != nil {
 		return err
 	}
-	if err := f.setAsViewport(context); err != nil {
+	if err := f.setAsViewport(); err != nil {
 		return err
 	}
-	context.BlendFunc(c.mode)
+	opengl.GetContext().BlendFunc(c.mode)
 
 	n := c.quadsNum()
 	if n == 0 {
@@ -191,7 +214,6 @@ func (c *drawImageCommand) Exec(context *opengl.Context, indexOffsetInBytes int)
 	p := &programContext{
 		state:            &theOpenGLState,
 		program:          theOpenGLState.programTexture,
-		context:          context,
 		projectionMatrix: proj,
 		texture:          c.src.texture.native,
 		colorM:           c.color,
@@ -201,7 +223,7 @@ func (c *drawImageCommand) Exec(context *opengl.Context, indexOffsetInBytes int)
 	}
 	// TODO: We should call glBindBuffer here?
 	// The buffer is already bound at begin() but it is counterintuitive.
-	context.DrawElements(opengl.Triangles, 6*n, indexOffsetInBytes)
+	opengl.GetContext().DrawElements(opengl.Triangles, 6*n, indexOffsetInBytes)
 	return nil
 }
 
@@ -209,29 +231,30 @@ func (c *drawImageCommand) split(quadsNum int) [2]*drawImageCommand {
 	c1 := *c
 	c2 := *c
 	s := opengl.Float.SizeInBytes()
-	c1.vertices = c.vertices[:quadsNum*QuadVertexSizeInBytes()/s]
-	c2.vertices = c.vertices[quadsNum*QuadVertexSizeInBytes()/s:]
+	n := quadsNum * QuadVertexSizeInBytes() / s
+	c1.verticesNum = n
+	c2.verticesNum -= n
 	return [2]*drawImageCommand{&c1, &c2}
 }
 
-func (c *drawImageCommand) isMergeable(other *drawImageCommand) bool {
-	if c.dst != other.dst {
+func (c *drawImageCommand) isMergeable(dst, src *Image, clr *affine.ColorM, mode opengl.CompositeMode) bool {
+	if c.dst != dst {
 		return false
 	}
-	if c.src != other.src {
+	if c.src != src {
 		return false
 	}
-	if !c.color.Equals(&other.color) {
+	if !c.color.Equals(clr) {
 		return false
 	}
-	if c.mode != other.mode {
+	if c.mode != mode {
 		return false
 	}
 	return true
 }
 
 func (c *drawImageCommand) quadsNum() int {
-	return len(c.vertices) * opengl.Float.SizeInBytes() / QuadVertexSizeInBytes()
+	return c.verticesNum * opengl.Float.SizeInBytes() / QuadVertexSizeInBytes()
 }
 
 type replacePixelsCommand struct {
@@ -239,29 +262,29 @@ type replacePixelsCommand struct {
 	pixels []uint8
 }
 
-func (c *replacePixelsCommand) Exec(context *opengl.Context, indexOffsetInBytes int) error {
-	f, err := c.dst.createFramebufferIfNeeded(context)
+func (c *replacePixelsCommand) Exec(indexOffsetInBytes int) error {
+	f, err := c.dst.createFramebufferIfNeeded()
 	if err != nil {
 		return err
 	}
-	if err := f.setAsViewport(context); err != nil {
+	if err := f.setAsViewport(); err != nil {
 		return err
 	}
 	// Filling with non black or white color is required here for glTexSubImage2D.
 	// Very mysterious but this actually works (Issue #186).
 	// This is needed even after fixing a shader bug at f537378f2a6a8ef56e1acf1c03034967b77c7b51.
-	if err := context.FillFramebuffer(0, 0, 0.5, 1); err != nil {
+	if err := opengl.GetContext().FillFramebuffer(0, 0, 0.5, 1); err != nil {
 		return err
 	}
 	// This is necessary on Android. We can't call glClear just before glTexSubImage2D without
 	// glFlush. glTexSubImage2D didn't work without this hack at least on Nexus 5x (#211).
 	// This also happens when a fillCommand precedes a replacePixelsCommand.
 	// TODO: Can we have a better way like optimizing commands?
-	context.Flush()
-	if err := context.BindTexture(c.dst.texture.native); err != nil {
+	opengl.GetContext().Flush()
+	if err := opengl.GetContext().BindTexture(c.dst.texture.native); err != nil {
 		return err
 	}
-	context.TexSubImage2D(c.pixels, c.dst.width, c.dst.height)
+	opengl.GetContext().TexSubImage2D(c.pixels, NextPowerOf2Int(c.dst.width), NextPowerOf2Int(c.dst.height))
 	return nil
 }
 
@@ -269,12 +292,12 @@ type disposeCommand struct {
 	target *Image
 }
 
-func (c *disposeCommand) Exec(context *opengl.Context, indexOffsetInBytes int) error {
+func (c *disposeCommand) Exec(indexOffsetInBytes int) error {
 	if c.target.framebuffer != nil {
-		context.DeleteFramebuffer(c.target.framebuffer.native)
+		opengl.GetContext().DeleteFramebuffer(c.target.framebuffer.native)
 	}
 	if c.target.texture != nil {
-		context.DeleteTexture(c.target.texture.native)
+		opengl.GetContext().DeleteTexture(c.target.texture.native)
 	}
 	return nil
 }
@@ -285,7 +308,7 @@ type newImageFromImageCommand struct {
 	filter opengl.Filter
 }
 
-func (c *newImageFromImageCommand) Exec(context *opengl.Context, indexOffsetInBytes int) error {
+func (c *newImageFromImageCommand) Exec(indexOffsetInBytes int) error {
 	origSize := c.img.Bounds().Size()
 	if origSize.X < 1 {
 		return errors.New("graphics: width must be equal or more than 1.")
@@ -297,7 +320,7 @@ func (c *newImageFromImageCommand) Exec(context *opengl.Context, indexOffsetInBy
 	if c.img.Bounds() != image.Rect(0, 0, NextPowerOf2Int(w), NextPowerOf2Int(h)) {
 		panic(fmt.Sprintf("graphics: invalid image bounds: %v", c.img.Bounds()))
 	}
-	native, err := context.NewTexture(w, h, c.img.Pix, c.filter)
+	native, err := opengl.GetContext().NewTexture(w, h, c.img.Pix, c.filter)
 	if err != nil {
 		return err
 	}
@@ -314,7 +337,7 @@ type newImageCommand struct {
 	filter opengl.Filter
 }
 
-func (c *newImageCommand) Exec(context *opengl.Context, indexOffsetInBytes int) error {
+func (c *newImageCommand) Exec(indexOffsetInBytes int) error {
 	w := NextPowerOf2Int(c.width)
 	h := NextPowerOf2Int(c.height)
 	if w < 1 {
@@ -323,7 +346,7 @@ func (c *newImageCommand) Exec(context *opengl.Context, indexOffsetInBytes int) 
 	if h < 1 {
 		return errors.New("graphics: height must be equal or more than 1.")
 	}
-	native, err := context.NewTexture(w, h, nil, c.filter)
+	native, err := opengl.GetContext().NewTexture(w, h, nil, c.filter)
 	if err != nil {
 		return err
 	}
@@ -339,7 +362,7 @@ type newScreenFramebufferImageCommand struct {
 	height int
 }
 
-func (c *newScreenFramebufferImageCommand) Exec(context *opengl.Context, indexOffsetInBytes int) error {
+func (c *newScreenFramebufferImageCommand) Exec(indexOffsetInBytes int) error {
 	if c.width < 1 {
 		return errors.New("graphics: width must be equal or more than 1.")
 	}
@@ -347,7 +370,7 @@ func (c *newScreenFramebufferImageCommand) Exec(context *opengl.Context, indexOf
 		return errors.New("graphics: height must be equal or more than 1.")
 	}
 	f := &framebuffer{
-		native: context.ScreenFramebuffer(),
+		native: opengl.GetContext().ScreenFramebuffer(),
 		flipY:  true,
 	}
 	c.result.framebuffer = f

@@ -87,10 +87,11 @@ func init() {
 
 type context struct {
 	gl            *webgl.Context
+	loseContext   *js.Object
 	lastProgramID programID
 }
 
-func NewContext() (*Context, error) {
+func Init() error {
 	var gl *webgl.Context
 
 	if js.Global.Get("require") == js.Undefined {
@@ -102,7 +103,7 @@ func NewContext() (*Context, error) {
 			PremultipliedAlpha: true,
 		})
 		if err != nil {
-			return nil, err
+			return err
 		}
 	} else {
 		// TODO: Now Ebiten with headless-gl doesn't work well (#141).
@@ -116,7 +117,17 @@ func NewContext() (*Context, error) {
 	}
 	c := &Context{}
 	c.gl = gl
-	return c, nil
+	// Getting an extension might fail after the context is lost, so
+	// it is required to get the extension here.
+	c.loseContext = gl.GetExtension("WEBGL_lose_context")
+	if c.loseContext != nil {
+		// This testing function name is temporary.
+		js.Global.Set("_ebiten_loseContextForTesting", func() {
+			c.loseContext.Call("loseContext")
+		})
+	}
+	theContext = c
+	return nil
 }
 
 func (c *Context) Reset() error {
@@ -210,7 +221,8 @@ func (c *Context) DeleteTexture(t Texture) {
 
 func (c *Context) IsTexture(t Texture) bool {
 	gl := c.gl
-	return gl.IsTexture(t.Object)
+	b := gl.IsTexture(t.Object)
+	return b
 }
 
 func (c *Context) TexSubImage2D(p []uint8, width, height int) {
@@ -406,4 +418,15 @@ func (c *Context) DrawElements(mode Mode, len int, offsetInBytes int) {
 func (c *Context) Flush() {
 	gl := c.gl
 	gl.Flush()
+}
+
+func (c *Context) IsContextLost() bool {
+	gl := c.gl
+	return gl.IsContextLost()
+}
+
+func (c *Context) RestoreContext() {
+	if c.loseContext != nil {
+		c.loseContext.Call("restoreContext")
+	}
 }

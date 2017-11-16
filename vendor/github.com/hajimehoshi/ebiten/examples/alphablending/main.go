@@ -35,26 +35,6 @@ var (
 	ebitenImage *ebiten.Image
 )
 
-type imageParts struct {
-	diff float64
-}
-
-func (p *imageParts) Src(i int) (int, int, int, int) {
-	w, h := ebitenImage.Size()
-	return 0, 0, w, h
-}
-
-func (p *imageParts) Dst(i int) (int, int, int, int) {
-	x := int(float64(i%10)*p.diff + 15)
-	y := int(float64(i/10)*p.diff + 20)
-	w, h := ebitenImage.Size()
-	return x, y, x + w, y + h
-}
-
-func (p *imageParts) Len() int {
-	return 10 * 10
-}
-
 func update(screen *ebiten.Image) error {
 	count++
 	count %= ebiten.FPS * 10
@@ -65,17 +45,18 @@ func update(screen *ebiten.Image) error {
 	case 240 < count:
 		diff = float64(480-count) * 0.2
 	}
-
-	if err := screen.Fill(color.NRGBA{0x00, 0x00, 0x80, 0xff}); err != nil {
-		return err
+	if ebiten.IsRunningSlowly() {
+		return nil
 	}
+	screen.Fill(color.NRGBA{0x00, 0x00, 0x80, 0xff})
 	op := &ebiten.DrawImageOptions{}
 	op.ColorM.Scale(1.0, 1.0, 1.0, 0.5)
-	op.ImageParts = &imageParts{
-		diff: diff,
-	}
-	if err := screen.DrawImage(ebitenImage, op); err != nil {
-		return err
+	for i := 0; i < 10*10; i++ {
+		op.GeoM.Reset()
+		x := float64(i%10)*diff + 15
+		y := float64(i/10)*diff + 20
+		op.GeoM.Translate(x, y)
+		screen.DrawImage(ebitenImage, op)
 	}
 	return nil
 }

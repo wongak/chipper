@@ -31,6 +31,7 @@ import (
 const (
 	screenWidth  = 320
 	screenHeight = 240
+	groundWidth  = screenWidth + 70
 	maxAngle     = 256
 	maxLean      = 16
 )
@@ -47,6 +48,43 @@ var (
 	groundImage          *ebiten.Image
 	fogImage             *ebiten.Image
 )
+
+func init() {
+	var err error
+	gophersImage, _, err = ebitenutil.NewImageFromFile("_resources/images/gophers.jpg", ebiten.FilterNearest)
+	if err != nil {
+		panic(err)
+	}
+	groundImage, _ = ebiten.NewImage(groundWidth, screenHeight*2/3+50, ebiten.FilterNearest)
+	const repeat = 5
+	w, h := gophersImage.Size()
+	repeatedGophersImage, _ = ebiten.NewImage(w*repeat, h*repeat, ebiten.FilterNearest)
+	for j := 0; j < repeat; j++ {
+		for i := 0; i < repeat; i++ {
+			op := &ebiten.DrawImageOptions{}
+			op.GeoM.Translate(float64(w*i), float64(h*j))
+			repeatedGophersImage.DrawImage(gophersImage, op)
+		}
+	}
+}
+
+func init() {
+	const fogHeight = 8
+	fogRGBA := image.NewRGBA(image.Rect(0, 0, groundWidth, fogHeight))
+	for j := 0; j < fogHeight; j++ {
+		a := uint32(float64(fogHeight-1-j) * 0xff / (fogHeight - 1))
+		clr := skyColor
+		r, g, b, oa := uint32(clr.R), uint32(clr.G), uint32(clr.B), uint32(clr.A)
+		clr.R = uint8(r * a / oa)
+		clr.G = uint8(g * a / oa)
+		clr.B = uint8(b * a / oa)
+		clr.A = uint8(a)
+		for i := 0; i < groundWidth; i++ {
+			fogRGBA.SetRGBA(i, j, clr)
+		}
+	}
+	fogImage, _ = ebiten.NewImageFromImage(fogRGBA, ebiten.FilterNearest)
+}
 
 type player struct {
 	x16   int
@@ -119,10 +157,8 @@ func (p *player) Angle() int {
 	return p.angle
 }
 
-func updateGroundImage(ground *ebiten.Image) error {
-	if err := ground.Clear(); err != nil {
-		return err
-	}
+func updateGroundImage(ground *ebiten.Image) {
+	ground.Clear()
 	x16, y16 := thePlayer.Position()
 	a := thePlayer.Angle()
 	gw, gh := ground.Size()
@@ -132,60 +168,40 @@ func updateGroundImage(ground *ebiten.Image) error {
 	op.GeoM.Translate(float64(-w*2), float64(-h*2))
 	op.GeoM.Rotate(float64(-a)*2*math.Pi/maxAngle + math.Pi*3.0/2.0)
 	op.GeoM.Translate(float64(gw)/2, float64(gh)-32)
-	if err := ground.DrawImage(repeatedGophersImage, op); err != nil {
-		return err
-	}
-	return nil
+	ground.DrawImage(repeatedGophersImage, op)
 }
 
-type groundParts struct {
-	image *ebiten.Image
+func scaleForLine(x int) float64 {
+	// This is an very rough approximate calculation.
+	return math.Pow(float64(x)/2.5, 1.2)
 }
 
-func (g *groundParts) Len() int {
-	_, h := g.image.Size()
-	return h
-}
-
-func (g *groundParts) Src(i int) (int, int, int, int) {
-	w, _ := g.image.Size()
-	return 0, i, w, i + 1
-}
-
-func (g *groundParts) scaleForLine(x float64) float64 {
-	_, h := g.image.Size()
-	x = float64(h) - x
-	return 200*((-x+50)/(x+50)+1) - 200*((-float64(h)+50)/(float64(h)+50)+1)
-}
-
-func (g *groundParts) Dst(i int) (int, int, int, int) {
-	w, _ := g.image.Size()
-	r := g.scaleForLine(float64(i))
-	j1 := g.scaleForLine(float64(i))
-	j2 := g.scaleForLine(float64(i + 1))
-	return -int(r), int(j1), w + int(r), int(math.Ceil(j2))
-}
-
-func drawGroundImage(screen *ebiten.Image, ground *ebiten.Image) error {
-	w, _ := ground.Size()
+func drawGroundImage(screen *ebiten.Image, ground *ebiten.Image) {
+	w, h := ground.Size()
+	g := ebiten.GeoM{}
+	g.Translate(-float64(w)/2, 0)
+	g.Rotate(-1 * float64(thePlayer.lean) / maxLean * math.Pi / 8)
+	g.Translate(float64(w)/2, 0)
+	g.Translate(float64(screenWidth-w)/2, screenHeight/3)
 	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(-float64(w)/2, 0)
-	op.GeoM.Rotate(-1 * float64(thePlayer.lean) / maxLean * math.Pi / 8)
-	op.GeoM.Translate(float64(w)/2, 0)
-	op.GeoM.Translate(float64(screenWidth-w)/2, screenHeight/3)
-	op.ImageParts = &groundParts{ground}
-	if err := screen.DrawImage(ground, op); err != nil {
-		return err
+	for i := 0; i < h; i++ {
+		op.GeoM.Reset()
+		x := scaleForLine(i)
+		j := scaleForLine(i)
+		dx0, dy0, dx1, dy1 := -x, j, float64(w)+x, j+6
+		sw := float64(dx1-dx0) / float64(w)
+		sh := float64(dy1 - dy0)
+		op.GeoM.Scale(sw, sh)
+		op.GeoM.Translate(float64(dx0), float64(dy0))
+		op.GeoM.Concat(g)
+
+		src := image.Rect(0, i, w, i+1)
+		op.SourceRect = &src
+		screen.DrawImage(ground, op)
 	}
 	op = &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(-float64(w)/2, 0)
-	op.GeoM.Rotate(-1 * float64(thePlayer.lean) / maxLean * math.Pi / 8)
-	op.GeoM.Translate(float64(w)/2, 0)
-	op.GeoM.Translate(float64(screenWidth-w)/2, screenHeight/3)
-	if err := screen.DrawImage(fogImage, op); err != nil {
-		return err
-	}
-	return nil
+	op.GeoM = g
+	screen.DrawImage(fogImage, op)
 }
 
 func update(screen *ebiten.Image) error {
@@ -204,69 +220,19 @@ func update(screen *ebiten.Image) error {
 	if !rotated {
 		thePlayer.Stabilize()
 	}
-
-	if err := screen.Fill(skyColor); err != nil {
-		return err
+	if ebiten.IsRunningSlowly() {
+		return nil
 	}
-	if err := updateGroundImage(groundImage); err != nil {
-		return err
-	}
-	if err := drawGroundImage(screen, groundImage); err != nil {
-		return err
-	}
-
+	screen.Fill(skyColor)
+	updateGroundImage(groundImage)
+	drawGroundImage(screen, groundImage)
 	tutrial := "Space: Move forward\nLeft/Right: Rotate"
 	msg := fmt.Sprintf("FPS: %0.2f\n%s", ebiten.CurrentFPS(), tutrial)
-	if err := ebitenutil.DebugPrint(screen, msg); err != nil {
-		return err
-	}
+	ebitenutil.DebugPrint(screen, msg)
 	return nil
 }
 
 func main() {
-	var err error
-	gophersImage, _, err = ebitenutil.NewImageFromFile("_resources/images/gophers.jpg", ebiten.FilterNearest)
-	if err != nil {
-		log.Fatal(err)
-	}
-	w, h := gophersImage.Size()
-	const repeat = 5
-	repeatedGophersImage, err = ebiten.NewImage(w*repeat, h*repeat, ebiten.FilterNearest)
-	if err != nil {
-		log.Fatal(err)
-	}
-	for j := 0; j < repeat; j++ {
-		for i := 0; i < repeat; i++ {
-			op := &ebiten.DrawImageOptions{}
-			op.GeoM.Translate(float64(w*i), float64(h*j))
-			if err := repeatedGophersImage.DrawImage(gophersImage, op); err != nil {
-				log.Fatal(err)
-			}
-		}
-	}
-	groundWidth := screenWidth + 70
-	groundImage, err = ebiten.NewImage(groundWidth, screenHeight*2/3+50, ebiten.FilterNearest)
-	if err != nil {
-		log.Fatal(err)
-	}
-	const fogHeight = 8
-	fogRGBA := image.NewRGBA(image.Rect(0, 0, groundWidth, fogHeight))
-	for j := 0; j < fogHeight; j++ {
-		a := uint32(float64(fogHeight-1-j) * 0xff / (fogHeight - 1))
-		clr := skyColor
-		r, g, b, oa := uint32(clr.R), uint32(clr.G), uint32(clr.B), uint32(clr.A)
-		clr.R = uint8(r * a / oa)
-		clr.G = uint8(g * a / oa)
-		clr.B = uint8(b * a / oa)
-		clr.A = uint8(a)
-		for i := 0; i < groundWidth; i++ {
-			fogRGBA.SetRGBA(i, j, clr)
-		}
-	}
-	fogImage, err = ebiten.NewImageFromImage(fogRGBA, ebiten.FilterNearest)
-	if err != nil {
-		log.Fatal(err)
-	}
 	if err := ebiten.Run(update, screenWidth, screenHeight, 2, "Air Ship (Ebiten Demo)"); err != nil {
 		log.Fatal(err)
 	}

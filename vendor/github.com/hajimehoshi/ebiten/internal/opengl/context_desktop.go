@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build darwin,!arm,!arm64 linux windows
+// +build darwin freebsd linux windows
 // +build !js
 // +build !android
 // +build !ios
@@ -73,10 +73,10 @@ type context struct {
 	runOnMainThread func(func() error) error
 }
 
-func NewContext(runOnMainThread func(func() error) error) (*Context, error) {
+func Init(runOnMainThread func(func() error) error) {
 	c := &Context{}
 	c.runOnMainThread = runOnMainThread
-	return c, nil
+	theContext = c
 }
 
 func (c *Context) runOnContextThread(f func() error) error {
@@ -95,7 +95,7 @@ func (c *Context) Reset() error {
 		c.init = true
 		return nil
 	}); err != nil {
-		return nil
+		return err
 	}
 	c.locationCache = newLocationCache()
 	c.lastTexture = invalidTexture
@@ -103,21 +103,17 @@ func (c *Context) Reset() error {
 	c.lastViewportWidth = 0
 	c.lastViewportHeight = 0
 	c.lastCompositeMode = CompositeModeUnknown
-	if err := c.runOnContextThread(func() error {
+	_ = c.runOnContextThread(func() error {
 		gl.Enable(gl.BLEND)
 		return nil
-	}); err != nil {
-		return err
-	}
+	})
 	c.BlendFunc(CompositeModeSourceOver)
-	if err := c.runOnContextThread(func() error {
+	_ = c.runOnContextThread(func() error {
 		f := int32(0)
 		gl.GetIntegerv(gl.FRAMEBUFFER_BINDING, &f)
 		c.screenFramebuffer = Framebuffer(f)
 		return nil
-	}); err != nil {
-		return err
-	}
+	})
 	return nil
 }
 
@@ -154,6 +150,8 @@ func (c *Context) NewTexture(width, height int, pixels []uint8, filter Filter) (
 	if err := c.runOnContextThread(func() error {
 		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, int32(filter))
 		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, int32(filter))
+		//gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP)
+		//gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP)
 
 		var p interface{}
 		if pixels != nil {

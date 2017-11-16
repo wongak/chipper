@@ -1,5 +1,6 @@
 package main
 
+/*
 import (
 	"bytes"
 	"fmt"
@@ -95,3 +96,4 @@ func drawMem() {
 		x++
 	}
 }
+*/

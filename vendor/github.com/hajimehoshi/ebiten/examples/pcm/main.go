@@ -17,7 +17,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"math"
 
@@ -98,7 +97,7 @@ func toBytes(l, r []int16) []byte {
 	return b
 }
 
-func addNote() error {
+func addNote() rune {
 	size := sampleRate / ebiten.FPS
 	notes := []float64{freqC, freqD, freqE, freqF, freqG, freqA * 2, freqB * 2}
 
@@ -127,31 +126,31 @@ func addNote() error {
 	square(l, vol, freq, 0.25)
 	square(r, vol, freq, 0.25)
 	b := toBytes(l, r)
-	p, err := audio.NewPlayerFromBytes(audioContext, b)
-	if err != nil {
-		return err
-	}
-	if err := p.Play(); err != nil {
-		return err
-	}
-	return nil
+	p, _ := audio.NewPlayerFromBytes(audioContext, b)
+	p.Play()
+	return rune(note)
 }
 
+var currentNote rune
+
 func update(screen *ebiten.Image) error {
-	defer func() {
-		frames++
-	}()
 	if frames%30 == 0 {
-		if err := addNote(); err != nil {
-			return err
-		}
+		currentNote = addNote()
 	}
-	if err := ebitenutil.DebugPrint(screen, fmt.Sprintf("FPS: %0.2f", ebiten.CurrentFPS())); err != nil {
-		return err
-	}
+	frames++
 	if err := audioContext.Update(); err != nil {
 		return err
 	}
+	if ebiten.IsRunningSlowly() {
+		return nil
+	}
+	msg := "Note: "
+	if currentNote == 'R' {
+		msg += "-"
+	} else {
+		msg += string(currentNote)
+	}
+	ebitenutil.DebugPrint(screen, msg)
 	return nil
 }
 

@@ -12,11 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build android ios darwin,arm darwin,arm64
+// +build android ios
 
 package ui
 
-func (i *input) updateTouches(touches []Touch) {
+import (
+	"sync"
+)
+
+type Input struct {
+	cursorX  int
+	cursorY  int
+	gamepads [16]gamePad
+	touches  []touch
+	m        sync.RWMutex
+}
+
+func (i *Input) IsKeyPressed(key Key) bool {
+	return false
+}
+
+func (i *Input) IsMouseButtonPressed(key MouseButton) bool {
+	return false
+}
+
+func (i *Input) updateTouches(touches []Touch) {
 	i.m.Lock()
 	defer i.m.Unlock()
 	ts := make([]touch, len(touches))

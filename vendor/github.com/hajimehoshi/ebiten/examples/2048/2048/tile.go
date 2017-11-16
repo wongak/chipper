@@ -27,20 +27,27 @@ import (
 	"github.com/hajimehoshi/ebiten/examples/common"
 )
 
+// TileData represents a tile information like a value and a position.
 type TileData struct {
 	value int
 	x     int
 	y     int
 }
 
+// Tile represents a tile infomation including TileData and animation states.
 type Tile struct {
-	current           TileData
-	next              TileData
+	current TileData
+
+	// next represents a next tile information after moving.
+	// next is empty when the tile is not about to move.
+	next TileData
+
 	movingCount       int
 	startPoppingCount int
 	poppingCount      int
 }
 
+// NewTile creates a new Tile object.
 func NewTile(value int, x, y int) *Tile {
 	return &Tile{
 		current: TileData{
@@ -52,22 +59,27 @@ func NewTile(value int, x, y int) *Tile {
 	}
 }
 
+// Value returns the current value.
 func (t *Tile) Value() int {
 	return t.current.value
 }
 
+// Pos returns the current position.
 func (t *Tile) Pos() (int, int) {
 	return t.current.x, t.current.y
 }
 
+// NextValue returns the next value.
 func (t *Tile) NextValue() int {
 	return t.next.value
 }
 
+// NextPos returns the next position.
 func (t *Tile) NextPos() (int, int) {
 	return t.next.x, t.next.y
 }
 
+// IsMoving returns a boolean value indicating if the tile is animating.
 func (t *Tile) IsMoving() bool {
 	return 0 < t.movingCount
 }
@@ -96,7 +108,7 @@ func tileAt(tiles map[*Tile]struct{}, x, y int) *Tile {
 	return result
 }
 
-func nextTileAt(tiles map[*Tile]struct{}, x, y int) *Tile {
+func currentOrNextTileAt(tiles map[*Tile]struct{}, x, y int) *Tile {
 	var result *Tile
 	for t := range tiles {
 		if 0 < t.movingCount {
@@ -121,6 +133,10 @@ const (
 	maxPoppingCount = 6
 )
 
+// MoveTiles moves tiles in the given tiles map if possible.
+// MoveTiles returns true if there are tiles that are to move, otherwise false.
+//
+// When MoveTiles is called, all tiles must not be about to move.
 func MoveTiles(tiles map[*Tile]struct{}, size int, dir Dir) bool {
 	vx, vy := dir.Vector()
 	tx := []int{}
@@ -149,6 +165,9 @@ func MoveTiles(tiles map[*Tile]struct{}, size int, dir Dir) bool {
 			if t.IsMoving() {
 				panic("not reach")
 			}
+			// (ii, jj) is the next position for tile t.
+			// (ii, jj) is updated until a mergeable tile is found or
+			// the tile t can't be moved any more.
 			ii := i
 			jj := j
 			for {
@@ -157,7 +176,7 @@ func MoveTiles(tiles map[*Tile]struct{}, size int, dir Dir) bool {
 				if ni < 0 || ni >= size || nj < 0 || nj >= size {
 					break
 				}
-				tt := nextTileAt(tiles, ni, nj)
+				tt := currentOrNextTileAt(tiles, ni, nj)
 				if tt == nil {
 					ii = ni
 					jj = nj
@@ -168,7 +187,8 @@ func MoveTiles(tiles map[*Tile]struct{}, size int, dir Dir) bool {
 					break
 				}
 				if 0 < tt.movingCount && tt.current.value != tt.next.value {
-					// already merged
+					// tt is already being merged with another tile.
+					// Break here without updating (ii, jj).
 					break
 				}
 				ii = ni
@@ -176,9 +196,12 @@ func MoveTiles(tiles map[*Tile]struct{}, size int, dir Dir) bool {
 				moved = true
 				break
 			}
+			// next is the next state of the tile t.
 			next := TileData{}
 			next.value = t.current.value
-			if tt := nextTileAt(tiles, ii, jj); tt != t && tt != nil {
+			// If there is a tile at the next position (ii, jj), this should be
+			// mergeable. Let's merge.
+			if tt := currentOrNextTileAt(tiles, ii, jj); tt != t && tt != nil {
 				next.value = t.current.value + tt.current.value
 				tt.next.value = 0
 				tt.next.x = ii
@@ -233,6 +256,7 @@ func addRandomTile(tiles map[*Tile]struct{}, size int) error {
 	return nil
 }
 
+// Update updates the tile's animation states.
 func (t *Tile) Update() error {
 	switch {
 	case 0 < t.movingCount:
@@ -285,22 +309,17 @@ var (
 )
 
 func init() {
-	var err error
-	tileImage, err = ebiten.NewImage(tileSize, tileSize, ebiten.FilterNearest)
-	if err != nil {
-		panic(err)
-	}
-	if err := tileImage.Fill(color.White); err != nil {
-		panic(err)
-	}
+	tileImage, _ = ebiten.NewImage(tileSize, tileSize, ebiten.FilterNearest)
+	tileImage.Fill(color.White)
 }
 
-func (t *Tile) Draw(boardImage *ebiten.Image) error {
+// Draw draws the current tile to the given boardImage.
+func (t *Tile) Draw(boardImage *ebiten.Image) {
 	i, j := t.current.x, t.current.y
 	ni, nj := t.next.x, t.next.y
 	v := t.current.value
 	if v == 0 {
-		return nil
+		return
 	}
 	op := &ebiten.DrawImageOptions{}
 	x := i*tileSize + (i+1)*tileMargin
@@ -336,9 +355,7 @@ func (t *Tile) Draw(boardImage *ebiten.Image) error {
 	op.GeoM.Translate(float64(x), float64(y))
 	r, g, b, a := colorToScale(tileBackgroundColor(v))
 	op.ColorM.Scale(r, g, b, a)
-	if err := boardImage.DrawImage(tileImage, op); err != nil {
-		return err
-	}
+	boardImage.DrawImage(tileImage, op)
 	str := strconv.Itoa(v)
 	scale := 2
 	if 2 < len(str) {
@@ -348,8 +365,5 @@ func (t *Tile) Draw(boardImage *ebiten.Image) error {
 	h := common.ArcadeFont.TextHeight(str) * scale
 	x = x + (tileSize-w)/2
 	y = y + (tileSize-h)/2
-	if err := common.ArcadeFont.DrawText(boardImage, str, x, y, scale, tileColor(v)); err != nil {
-		return err
-	}
-	return nil
+	common.ArcadeFont.DrawText(boardImage, str, x, y, scale, tileColor(v))
 }

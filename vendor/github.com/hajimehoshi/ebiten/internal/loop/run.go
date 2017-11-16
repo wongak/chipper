@@ -16,10 +16,9 @@ package loop
 
 import (
 	"errors"
-	"sync"
 	"time"
 
-	"github.com/hajimehoshi/ebiten/internal/opengl"
+	"github.com/hajimehoshi/ebiten/internal/sync"
 	"github.com/hajimehoshi/ebiten/internal/ui"
 )
 
@@ -32,7 +31,7 @@ type runContext struct {
 	fps            int
 	currentFPS     float64
 	runningSlowly  bool
-	frames         int
+	frames         int64
 	lastUpdated    int64
 	lastFPSUpdated int64
 	m              sync.RWMutex
@@ -75,8 +74,9 @@ func (c *runContext) updateFPS(fps float64) {
 }
 
 type GraphicsContext interface {
-	SetSize(width, height int, scale float64) error
-	UpdateAndDraw(context *opengl.Context, updateCount int) error
+	SetSize(width, height int, scale float64)
+	UpdateAndDraw(updateCount int) error
+	Invalidate()
 }
 
 type loopGraphicsContext struct {
@@ -84,12 +84,16 @@ type loopGraphicsContext struct {
 	graphicsContext GraphicsContext
 }
 
-func (g *loopGraphicsContext) SetSize(width, height int, scale float64) error {
-	return g.graphicsContext.SetSize(width, height, scale)
+func (g *loopGraphicsContext) SetSize(width, height int, scale float64) {
+	g.graphicsContext.SetSize(width, height, scale)
 }
 
 func (g *loopGraphicsContext) Update() error {
 	return g.runContext.render(g.graphicsContext)
+}
+
+func (g *loopGraphicsContext) Invalidate() {
+	g.graphicsContext.Invalidate()
 }
 
 func Run(g GraphicsContext, width, height int, scale float64, title string, fps int) (err error) {
@@ -145,7 +149,7 @@ func (c *runContext) render(g GraphicsContext) error {
 	if tt == 0 && (int64(time.Second)/int64(fps)-int64(5*time.Millisecond)) < t {
 		tt = 1
 	}
-	if err := g.UpdateAndDraw(ui.GLContext(), tt); err != nil {
+	if err := g.UpdateAndDraw(tt); err != nil {
 		return err
 	}
 	c.lastUpdated += int64(tt) * int64(time.Second) / int64(fps)

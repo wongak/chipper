@@ -84,22 +84,20 @@ func parseFont() error {
 		d.DrawString(s)
 		y += size
 	}
-	return textImage.ReplacePixels(dst.Pix)
+	textImage.ReplacePixels(dst.Pix)
+	return nil
 }
 
 func update(screen *ebiten.Image) error {
-	if err := screen.DrawImage(textImage, &ebiten.DrawImageOptions{}); err != nil {
-		return err
+	if ebiten.IsRunningSlowly() {
+		return nil
 	}
+	screen.DrawImage(textImage, &ebiten.DrawImageOptions{})
 	return nil
 }
 
 func main() {
-	var err error
-	textImage, err = ebiten.NewImage(screenWidth, screenHeight, ebiten.FilterNearest)
-	if err != nil {
-		log.Fatal(err)
-	}
+	textImage, _ = ebiten.NewImage(screenWidth, screenHeight, ebiten.FilterNearest)
 	if err := parseFont(); err != nil {
 		log.Fatal(err)
 	}

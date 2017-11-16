@@ -115,7 +115,13 @@ func (d *Display) Draw(x, y, h uint8, sprite []byte) uint8 {
 		// get line bitmap
 		m := d.d[l+y]
 		// shift sprite to xa position
-		sp := uint64(sprite[l]) << (56 - x)
+		shft := 56 - int(x)
+		var sp uint64
+		if shft < 0 {
+			sp = uint64(sprite[l]) >> uint(shft*-1)
+		} else {
+			sp = uint64(sprite[l]) << (56 - x)
+		}
 		// XOR bitmap and sprite
 		d.d[l+y] = m ^ sp
 		// AND bitmap and sprite will give us any

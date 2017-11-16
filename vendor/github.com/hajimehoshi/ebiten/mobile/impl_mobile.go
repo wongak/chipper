@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build android ios darwin,arm darwin,arm64
+// +build android ios
 
 package mobile
 
@@ -23,16 +23,22 @@ import (
 	"github.com/hajimehoshi/ebiten/internal/ui"
 )
 
-var chError <-chan error
+var (
+	chError <-chan error
+	running bool
+)
 
 func update() error {
 	if chError == nil {
 		return errors.New("mobile: chError must not be nil: Start is not called yet?")
 	}
+	if !running {
+		return errors.New("mobile: start must be called ahead of update")
+	}
 	return ui.Render(chError)
 }
 
-func start(f func(*ebiten.Image) error, width, height int, scale float64, title string) error {
+func start(f func(*ebiten.Image) error, width, height int, scale float64, title string) {
+	running = true
 	chError = ebiten.RunWithoutMainLoop(f, width, height, scale, title)
-	return nil
 }

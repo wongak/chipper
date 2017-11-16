@@ -35,24 +35,20 @@ var (
 )
 
 func update(screen *ebiten.Image) error {
+	if ebiten.IsRunningSlowly() {
+		return nil
+	}
 	w, _ := ebitenImage.Size()
 	const ox = 10
 	const oy = 10
-
-	if err := screen.Fill(color.NRGBA{0x00, 0x40, 0x80, 0xff}); err != nil {
-		return err
-	}
+	screen.Fill(color.NRGBA{0x00, 0x40, 0x80, 0xff})
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(ox, oy)
-	if err := screen.DrawImage(ebitenImage, op); err != nil {
-		return err
-	}
+	screen.DrawImage(ebitenImage, op)
 	op = &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(ox+float64(w), oy)
 	op.CompositeMode = ebiten.CompositeModeLighter
-	if err := screen.DrawImage(ebitenImage, op); err != nil {
-		return err
-	}
+	screen.DrawImage(ebitenImage, op)
 	return nil
 }
 

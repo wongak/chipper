@@ -1,0 +1,46 @@
+language: go
+
+go:
+  - 1.8
+
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+    packages:
+      - libasound2-dev
+      - libglew-dev # required by headless-gl.
+      - libgles2-mesa-dev
+      - libalut-dev
+      - libxxf86vm-dev
+      - libxrandr-dev
+
+# gl module is not available (2016-05-18)
+#
+# before_install:
+#  - export NODE_PATH=$(npm config get prefix)/lib/node_modules
+#  - npm install --global gl
+
+install:
+  - go get -t -v ./...
+  - go get github.com/gopherjs/gopherjs
+  - go get github.com/gopherjs/webgl
+  - go get -tags example ./examples/...
+
+before_script:
+  - export DISPLAY=:99.0
+  - sh -e /etc/init.d/xvfb start
+  - sleep 3
+
+script:
+  - go build -tags example -v ./...
+  - go test -v ./...
+  - gopherjs build --tags example -v github.com/hajimehoshi/ebiten/examples/blocks
+
+# Looks like testing GL on node is hard.
+# - gopherjs test -v github.com/hajimehoshi/ebiten github.com/hajimehoshi/ebiten/internal/graphics
+
+notifications:
+  email:
+    recipients:
+      - hajimehoshi@gmail.com
